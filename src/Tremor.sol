@@ -2,17 +2,18 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-// import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-// import {IFlashLoanReceiver} from "@aave/core-v3/contracts/interfaces/IFlashLoanReceiver.sol";
+import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Tremor is IFlashLoanReceiver {
 
-    function ADDRESSES_PROVIDER() external view returns (IPoolAddressesProvider) {
+    function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
         return IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
     }
 
-    function POOL() external view returns (IPool) {
-        return IPool(0x794a61358D6845594c8fCcD7fC5086eA5CC6243D);
+    function POOL() external view override returns (IPool) {
+        return IPool(0x794A61358D6845594C8fcCD7fc5086eA5cC6243D);
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
     }
 
@@ -41,7 +42,7 @@ contract Tremor is IFlashLoanReceiver {
         amounts[3] = 20_000_000 * 1e6; // USDT max flash loan amount (6 decimals) 
         amounts[4] = 20_000_000 * 1e18; // DAI max flash loan amount
         uint256[] memory interestRateModes = new uint256[](5);
-        POOL().flashLoan(address(this), assets, amounts, interestRateModes, address(0), bytes(""), 0);
+        this.POOL().flashLoan(address(this), assets, amounts, interestRateModes, address(0), bytes(""), 0);
         console.log("WETH balance:", IERC20(assets[0]).balanceOf(address(this)));
         console.log("WBTC balance:", IERC20(assets[1]).balanceOf(address(this)));
         console.log("USDC balance:", IERC20(assets[2]).balanceOf(address(this)));
