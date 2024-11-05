@@ -27,8 +27,8 @@ contract Tremor is IFlashLoanReceiver {
         return true;
     }
 
-    function callFlashLoan(uint256 amount) external {
-        bytes memory params = abi.encode(amount);
+    function callFlashLoan() external {
+        // bytes memory params = abi.encode();
         address[] memory assets = new address[](5);
         assets[0] = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH on Arbitrum
         assets[1] = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f; // WBTC on Arbitrum
@@ -48,5 +48,25 @@ contract Tremor is IFlashLoanReceiver {
         console.log("USDC balance:", IERC20(assets[2]).balanceOf(address(this)));
         console.log("USDT balance:", IERC20(assets[3]).balanceOf(address(this)));
         console.log("DAI balance:", IERC20(assets[4]).balanceOf(address(this)));
+    }
+
+    function callSingleFlashLoan(address asset, uint256 amount) external {
+        address[] memory assets = new address[](1);
+        assets[0] = asset;
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        
+        uint256[] memory modes = new uint256[](1);
+        
+        this.POOL().flashLoan(
+            address(this),
+            assets,
+            amounts,
+            modes,
+            address(0),
+            bytes(""),
+            0
+        );
     }
 }
