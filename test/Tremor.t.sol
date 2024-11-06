@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Tremor} from "../src/Tremor.sol";
@@ -73,9 +73,7 @@ contract TremorTest is Test {
         console.log("WETH balance before:", IERC20(weth).balanceOf(address(tremor)));
         
         // Approve POOL to spend borrowed amount + 0.05% fee
-        uint256 amountWithFee = amount + ((amount * 5) / 10000);
-        console.log("Amount with fee:", amountWithFee);
-        
+        uint256 amountWithFee = amount + ((amount * 5) / 10000);        
         vm.prank(address(tremor));
         IERC20(weth).approve(pool, amountWithFee);
         console.log("Approved amount:", IERC20(weth).allowance(address(tremor), pool));
@@ -88,30 +86,32 @@ contract TremorTest is Test {
         
         vm.recordLogs();
         
-        try tremor.callSingleFlashLoan(weth, amount) {
-            console.log("Flash loan succeeded");
-        } catch (bytes memory err) {
-            console.log("Flash loan failed");
-            console.logBytes(err);
+        tremor.callSingleFlashLoan(weth, amount);
+
+        // try tremor.callSingleFlashLoan(weth, amount) {
+        //     console.log("Flash loan succeeded");
+        // } catch (bytes memory err) {
+        //     console.log("Flash loan failed");
+        //     console.logBytes(err);
             
-            Vm.Log[] memory entries = vm.getRecordedLogs();
-            for (uint i = 0; i < entries.length; i++) {
-                emit Debug("Log entry", entries[i].data);
-            }
+        //     Vm.Log[] memory entries = vm.getRecordedLogs();
+        //     for (uint i = 0; i < entries.length; i++) {
+        //         emit Debug("Log entry", entries[i].data);
+        //     }
             
-            // Try to decode the error if it's a revert string
-            if (err.length > 4) {
-                bytes4 selector = bytes4(err);
-                if (selector == 0x08c379a0) { // Error(string)
-                    bytes memory data = new bytes(err.length - 4);
-                    for (uint i = 4; i < err.length; i++) {
-                        data[i-4] = err[i];
-                    }
-                    string memory reason = abi.decode(data, (string));
-                    console.log("Revert reason:", reason);
-                }
-            }
-        }
+        //     // Try to decode the error if it's a revert string
+        //     if (err.length > 4) {
+        //         bytes4 selector = bytes4(err);
+        //         if (selector == 0x08c379a0) { // Error(string)
+        //             bytes memory data = new bytes(err.length - 4);
+        //             for (uint i = 4; i < err.length; i++) {
+        //                 data[i-4] = err[i];
+        //             }
+        //             string memory reason = abi.decode(data, (string));
+        //             console.log("Revert reason:", reason);
+        //         }
+        //     }
+        // }
     }
 
     // function testFuzz_SetNumber(uint256 x) public {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
 import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
@@ -27,44 +27,35 @@ contract Tremor is IFlashLoanReceiver {
         return true;
     }
 
-    function callFlashLoan() external {
-        // bytes memory params = abi.encode();
-        address[] memory assets = new address[](5);
-        assets[0] = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH on Arbitrum
-        assets[1] = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f; // WBTC on Arbitrum
-        assets[2] = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8; // USDC on Arbitrum
-        assets[3] = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9; // USDT on Arbitrum
-        assets[4] = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1; // DAI on Arbitrum
-        uint256[] memory amounts = new uint256[](5);
-        amounts[0] = 6_900 * 1e18;    // WETH max flash loan amount
-        amounts[1] = 440 * 1e8;       // WBTC max flash loan amount (8 decimals)
-        amounts[2] = 20_000_000 * 1e6; // USDC max flash loan amount (6 decimals)
-        amounts[3] = 20_000_000 * 1e6; // USDT max flash loan amount (6 decimals) 
-        amounts[4] = 20_000_000 * 1e18; // DAI max flash loan amount
-        uint256[] memory interestRateModes = new uint256[](5);
-        this.POOL().flashLoan(address(this), assets, amounts, interestRateModes, address(0), bytes(""), 0);
-        console.log("WETH balance:", IERC20(assets[0]).balanceOf(address(this)));
-        console.log("WBTC balance:", IERC20(assets[1]).balanceOf(address(this)));
-        console.log("USDC balance:", IERC20(assets[2]).balanceOf(address(this)));
-        console.log("USDT balance:", IERC20(assets[3]).balanceOf(address(this)));
-        console.log("DAI balance:", IERC20(assets[4]).balanceOf(address(this)));
-    }
+    // function callFlashLoan() external {
+    //     // bytes memory params = abi.encode();
+    //     address[] memory assets = new address[](5);
+    //     assets[0] = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH on Arbitrum
+    //     assets[1] = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f; // WBTC on Arbitrum
+    //     assets[2] = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8; // USDC on Arbitrum
+    //     assets[3] = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9; // USDT on Arbitrum
+    //     assets[4] = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1; // DAI on Arbitrum
+    //     uint256[] memory amounts = new uint256[](5);
+    //     amounts[0] = 6_900 * 1e18;    // WETH max flash loan amount
+    //     amounts[1] = 440 * 1e8;       // WBTC max flash loan amount (8 decimals)
+    //     amounts[2] = 20_000_000 * 1e6; // USDC max flash loan amount (6 decimals)
+    //     amounts[3] = 20_000_000 * 1e6; // USDT max flash loan amount (6 decimals) 
+    //     amounts[4] = 20_000_000 * 1e18; // DAI max flash loan amount
+    //     uint256[] memory interestRateModes = new uint256[](5);
+    //     this.POOL().flashLoan(address(this), assets, amounts, interestRateModes, address(0), bytes(""), 0);
+    //     console.log("WETH balance:", IERC20(assets[0]).balanceOf(address(this)));
+    //     console.log("WBTC balance:", IERC20(assets[1]).balanceOf(address(this)));
+    //     console.log("USDC balance:", IERC20(assets[2]).balanceOf(address(this)));
+    //     console.log("USDT balance:", IERC20(assets[3]).balanceOf(address(this)));
+    //     console.log("DAI balance:", IERC20(assets[4]).balanceOf(address(this)));
+    // }
+    
 
     function callSingleFlashLoan(address asset, uint256 amount) external {
-        address[] memory assets = new address[](1);
-        assets[0] = asset;
-        
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = amount;
-        
-        uint256[] memory modes = new uint256[](1);
-        
-        this.POOL().flashLoan(
+        this.POOL().flashLoanSimple(
             address(this),
-            assets,
-            amounts,
-            modes,
-            address(0),
+            asset,
+            amount,
             bytes(""),
             0
         );
