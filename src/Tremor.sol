@@ -1,29 +1,35 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.10;
 
 import {Test, console} from "forge-std/Test.sol";
 import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
+import {IFlashLoanSimpleReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Tremor is IFlashLoanReceiver {
+contract Tremor is IFlashLoanSimpleReceiver {
+    address public addressesProvider;
+    address public pool;
+
+    constructor(address _addressesProvider, address _pool) {
+        addressesProvider = _addressesProvider;
+        pool = _pool;
+    }
 
     function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
-        return IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
+        return IPoolAddressesProvider(addressesProvider);
     }
 
     function POOL() external view override returns (IPool) {
-        return IPool(0x794A61358D6845594C8fcCD7fc5086eA5cC6243D);
+        return IPool(pool);
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
     }
 
-    function executeOperation(
-        address[] calldata assets,
-        uint256[] calldata amounts,
-        uint256[] calldata premiums,
-        address initiator,
-        bytes calldata params
-    ) external returns (bool) {
+    function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes calldata params)
+        external
+        returns (bool)
+    {
+        console.log("FLASHLOAN RECEIVED");
+        console.log("Asset balance:", IERC20(asset).balanceOf(address(this)));
         return true;
     }
 
@@ -39,7 +45,7 @@ contract Tremor is IFlashLoanReceiver {
     //     amounts[0] = 6_900 * 1e18;    // WETH max flash loan amount
     //     amounts[1] = 440 * 1e8;       // WBTC max flash loan amount (8 decimals)
     //     amounts[2] = 20_000_000 * 1e6; // USDC max flash loan amount (6 decimals)
-    //     amounts[3] = 20_000_000 * 1e6; // USDT max flash loan amount (6 decimals) 
+    //     amounts[3] = 20_000_000 * 1e6; // USDT max flash loan amount (6 decimals)
     //     amounts[4] = 20_000_000 * 1e18; // DAI max flash loan amount
     //     uint256[] memory interestRateModes = new uint256[](5);
     //     this.POOL().flashLoan(address(this), assets, amounts, interestRateModes, address(0), bytes(""), 0);
@@ -49,15 +55,11 @@ contract Tremor is IFlashLoanReceiver {
     //     console.log("USDT balance:", IERC20(assets[3]).balanceOf(address(this)));
     //     console.log("DAI balance:", IERC20(assets[4]).balanceOf(address(this)));
     // }
-    
 
     function callSingleFlashLoan(address asset, uint256 amount) external {
-        this.POOL().flashLoanSimple(
-            address(this),
-            asset,
-            amount,
-            bytes(""),
-            0
-        );
+        IERC20(asset).approve(address(this.POOL()), type(uint256).max);
+        console.log("Approved amount:", IERC20(asset).allowance(address(this), address(this.POOL())));
+        this.POOL().flashLoanSimple(address(this), asset, amount, bytes(""), 0);
+        console.log("ZING");
     }
 }

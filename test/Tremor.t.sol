@@ -1,121 +1,143 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.10;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Tremor} from "../src/Tremor.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
+import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
+import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol"; // Add this import
+
+// contract MockERC20 {
+//     mapping(address => uint256) public balanceOf;
+//     mapping(address => mapping(address => uint256)) public allowance;
+
+//     function approve(address spender, uint256 amount) public returns (bool) {
+//         allowance[msg.sender][spender] = amount;
+//         return true;
+//     }
+
+//     function transfer(address to, uint256 amount) public returns (bool) {
+//         balanceOf[msg.sender] -= amount;
+//         balanceOf[to] += amount;
+//         return true;
+//     }
+
+//     function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+//         require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
+//         allowance[from][msg.sender] -= amount;
+//         balanceOf[from] -= amount;
+//         balanceOf[to] += amount;
+//         return true;
+//     }
+// }
 
 contract TremorTest is Test {
     Tremor public tremor;
-    event Debug(string message, bytes data);
+    IPool public pool;
+    DeployAaveV3 public deployer;
+
+    address public LINK;
+    address public aLINK;
+    IERC20 public linkToken;
 
     function setUp() public {
-        tremor = new Tremor();
-        vm.label(0x794A61358D6845594C8fcCD7fc5086eA5cC6243D, "AAVE_POOL");
+        uint256 forkId = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
+        vm.selectFork(forkId);
+
+        // Deploy AAVE V3
+        // deployer = new DeployAaveV3();
+        // deployer.run();
+
+        // Get the deployed pool address from the deployer
+        // pool = IPool(deployer.getPool());
+        pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+
+        // Get the LINK token address from the deployer instead of using a constant
+        // LINK = deployer.linkToken();
+        // LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
+        // WETH: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1 -14784450271841927598027 = 14784
+        // aWETH: 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8
+        // WBTC: 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f - 330421334539 = 3300
+        // aWBTC: 0x078f358208685046a11C85e8ad32895DED33A249
+        LINK = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+        aLINK = 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8;
+        linkToken = IERC20(LINK);
+        console.log("Flash-loanable:", IERC20(LINK).balanceOf(aLINK));
+
+        // Deploy Tremor
+        // tremor = new Tremor(address(deployer.getAddressesProvider()), address(pool));
+        tremor = new Tremor(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool));
+
+        // No need for vm.etch since we're using the already deployed MockERC20
+
+        // Set up labels for better trace outputs
+        vm.label(address(pool), "AAVE_POOL");
+        vm.label(LINK, "LINK");
     }
-
-    // function test_callFlashLoan() public {
-    //     // Approve POOL to spend borrowed amounts + 0.05% fee
-    //     address[] memory assets = new address[](5);
-    //     assets[0] = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH
-    //     assets[1] = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f; // WBTC  
-    //     assets[2] = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8; // USDC
-    //     assets[3] = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9; // USDT
-    //     assets[4] = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1; // DAI
-
-    //     uint256[] memory amounts = new uint256[](5);
-    //     amounts[0] = 6_900 * 1e18;         // WETH
-    //     amounts[1] = 440 * 1e8;            // WBTC
-    //     amounts[2] = 20_000_000 * 1e6;     // USDC 
-    //     amounts[3] = 20_000_000 * 1e6;     // USDT
-    //     amounts[4] = 20_000_000 * 1e18;    // DAI
-
-    //     address pool = 0x794A61358D6845594C8fcCD7fc5086eA5cC6243D;
-
-    //     // Calculate amounts including 0.05% fee
-    //     for(uint i = 0; i < assets.length; i++) {
-    //         uint256 amountWithFee = amounts[i] + ((amounts[i] * 5) / 10000); // 0.05% fee
-    //         vm.prank(address(tremor));
-    //         IERC20(assets[i]).approve(pool, amountWithFee);
-    //     }
-
-    //     // Mint fee amounts to Tremor contract to cover the 0.05% premium
-    //     for(uint i = 0; i < assets.length; i++) {
-    //         uint256 fee = (amounts[i] * 5) / 10000; // 0.05% fee
-    //         deal(assets[i], address(tremor), fee);
-    //     }
-
-    //     // Add tracing
-    //     vm.recordLogs();
-        
-    //     try tremor.callFlashLoan() {
-    //         console.log("Flash loan succeeded");
-    //     } catch (bytes memory err) {
-    //         console.log("Flash loan failed");
-    //         console.logBytes(err);
-            
-    //         // Get the logs
-    //         Vm.Log[] memory entries = vm.getRecordedLogs();
-    //         for (uint i = 0; i < entries.length; i++) {
-    //             console.log("Log", i);
-    //             console.logBytes32(entries[i].topics[0]);
-    //             console.logBytes(entries[i].data);
-    //         }
-    //     }
-    // }
 
     function test_callSingleFlashLoan() public {
-        address weth = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-        uint256 amount = 1 * 1e18; // 1 WETH
-        address pool = 0x794A61358D6845594C8fcCD7fc5086eA5cC6243D;
-        
-        // Log initial state
-        console.log("WETH balance before:", IERC20(weth).balanceOf(address(tremor)));
-        
-        // Approve POOL to spend borrowed amount + 0.05% fee
-        uint256 amountWithFee = amount + ((amount * 5) / 10000);        
-        vm.prank(address(tremor));
-        IERC20(weth).approve(pool, amountWithFee);
-        console.log("Approved amount:", IERC20(weth).allowance(address(tremor), pool));
-        
-        // Mint fee amount to Tremor contract
-        uint256 fee = (amount * 5) / 10000;
-        deal(weth, address(tremor), fee);
-        console.log("Fee minted:", fee);
-        console.log("WETH balance after fee mint:", IERC20(weth).balanceOf(address(tremor)));
-        
-        vm.recordLogs();
-        
-        tremor.callSingleFlashLoan(weth, amount);
+        uint256 amount = 3000 * 1e8; // 1000 LINK tokens
+        // uint256 amount = 100239444798603839364697;
 
-        // try tremor.callSingleFlashLoan(weth, amount) {
-        //     console.log("Flash loan succeeded");
-        // } catch (bytes memory err) {
-        //     console.log("Flash loan failed");
-        //     console.logBytes(err);
-            
-        //     Vm.Log[] memory entries = vm.getRecordedLogs();
-        //     for (uint i = 0; i < entries.length; i++) {
-        //         emit Debug("Log entry", entries[i].data);
-        //     }
-            
-        //     // Try to decode the error if it's a revert string
-        //     if (err.length > 4) {
-        //         bytes4 selector = bytes4(err);
-        //         if (selector == 0x08c379a0) { // Error(string)
-        //             bytes memory data = new bytes(err.length - 4);
-        //             for (uint i = 4; i < err.length; i++) {
-        //                 data[i-4] = err[i];
-        //             }
-        //             string memory reason = abi.decode(data, (string));
-        //             console.log("Revert reason:", reason);
-        //         }
-        //     }
-        // }
+        // Supply some LINK to the pool first
+        // deal(LINK, address(this), amount * 2);
+        // IERC20(LINK).approve(address(pool), type(uint256).max);
+        // pool.supply(LINK, amount * 2, address(this), 0);
+
+        // Get the aToken address for LINK
+        DataTypes.ReserveData memory reserveData = pool.getReserveData(LINK);
+        address aTokenAddress = reserveData.aTokenAddress;
+        // Get total supply of aTokens which represents total LINK in pool
+        uint256 totalLinkInPool = IERC20(aTokenAddress).totalSupply();
+        console.log("Total LINK in pool:", totalLinkInPool);
+
+        // Fund Tremor contract with fee amount (0.05%)
+        // uint256 fee = (amount * 5) / 100;
+        uint256 fee = (amount * 5) / 10000;
+        deal(LINK, address(tremor), fee);
+
+        console.log("FLASHLOAN_PREMIUM_TO_PROTOCOL:", pool.FLASHLOAN_PREMIUM_TO_PROTOCOL());
+        console.log("FLASHLOAN_PREMIUM_TOTAL:", pool.FLASHLOAN_PREMIUM_TOTAL());
+
+        // // Get the pool configurator address
+        // address poolConfigurator = IPoolAddressesProvider(deployer.getAddressesProvider()).getPoolConfigurator();
+        // // Impersonate pool configurator to update flash loan premiums
+        // vm.prank(poolConfigurator);
+        // pool.updateFlashloanPremiums(5, 5);
+
+        // Approve pool to spend tokens
+        IERC20(LINK).approve(address(pool), type(uint256).max);
+
+        vm.recordLogs();
+
+        try tremor.callSingleFlashLoan(LINK, amount) {
+            console.log("Flash loan succeeded");
+            console.log("Final LINK balance:", IERC20(LINK).balanceOf(address(tremor)));
+        } catch (bytes memory err) {
+            console.log("Flash loan failed");
+            console.logBytes(err);
+
+            Vm.Log[] memory entries = vm.getRecordedLogs();
+            for (uint256 i = 0; i < entries.length; i++) {
+                emit Debug("Log entry", entries[i].data);
+            }
+
+            // Try to decode the error if it's a revert string
+            if (err.length > 4) {
+                bytes4 selector = bytes4(err);
+                if (selector == 0x08c379a0) {
+                    bytes memory data = new bytes(err.length - 4);
+                    for (uint256 i = 4; i < err.length; i++) {
+                        data[i - 4] = err[i];
+                    }
+                    string memory reason = abi.decode(data, (string));
+                    console.log("Revert reason:", reason);
+                }
+            }
+        }
     }
 
-    // function testFuzz_SetNumber(uint256 x) public {
-    //     counter.setNumber(x);
-    //     assertEq(counter.number(), x);
-    // }
+    event Debug(string message, bytes data);
 }

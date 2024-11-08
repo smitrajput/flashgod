@@ -6,6 +6,7 @@ remappings = [
     "@aave/core-v3/=lib/aave-v3-core/",
     "@openzeppelin/=lib/openzeppelin-contracts/"
 ]
+evm_version = "shanghai"
 
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
