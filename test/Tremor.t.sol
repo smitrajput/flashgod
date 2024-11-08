@@ -108,7 +108,7 @@ contract TremorTest is Test {
         // pool.updateFlashloanPremiums(5, 5);
 
         // Approve pool to spend tokens
-        IERC20(LINK).approve(address(pool), type(uint256).max);
+        // IERC20(LINK).approve(address(pool), type(uint256).max);
 
         vm.recordLogs();
 
