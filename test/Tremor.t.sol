@@ -54,6 +54,8 @@ contract TremorTest is Test {
         // pool = IPool(deployer.getPool());
         pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
 
+        // FIND MAX FLASH-LOANABLE AMOUNTS OF ALL FLASHLOANABLE TOKENS
+
         // Get the LINK token address from the deployer instead of using a constant
         // LINK = deployer.linkToken();
         // LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
@@ -61,8 +63,10 @@ contract TremorTest is Test {
         // aWETH: 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8
         // WBTC: 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f - 330421334539 = 3300
         // aWBTC: 0x078f358208685046a11C85e8ad32895DED33A249
-        LINK = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-        aLINK = 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8;
+        // weETH: 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe
+        // aweETH: 0x8437d7C167dFB82ED4Cb79CD44B7a32A1dd95c77
+        LINK = 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe;
+        aLINK = 0x8437d7C167dFB82ED4Cb79CD44B7a32A1dd95c77;
         linkToken = IERC20(LINK);
         console.log("Flash-loanable:", IERC20(LINK).balanceOf(aLINK));
 
