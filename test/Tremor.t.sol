@@ -4,43 +4,26 @@ pragma solidity ^0.8.10;
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Tremor} from "../src/Tremor.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol"; // Add this import
-
-// contract MockERC20 {
-//     mapping(address => uint256) public balanceOf;
-//     mapping(address => mapping(address => uint256)) public allowance;
-
-//     function approve(address spender, uint256 amount) public returns (bool) {
-//         allowance[msg.sender][spender] = amount;
-//         return true;
-//     }
-
-//     function transfer(address to, uint256 amount) public returns (bool) {
-//         balanceOf[msg.sender] -= amount;
-//         balanceOf[to] += amount;
-//         return true;
-//     }
-
-//     function transferFrom(address from, address to, uint256 amount) public returns (bool) {
-//         require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
-//         allowance[from][msg.sender] -= amount;
-//         balanceOf[from] -= amount;
-//         balanceOf[to] += amount;
-//         return true;
-//     }
-// }
 
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
     DeployAaveV3 public deployer;
 
-    address public LINK;
-    address public aLINK;
-    IERC20 public linkToken;
+    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    address public constant WE_ETH = 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe;
+    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    address public constant WSTETH = 0x5979D7b546E38E414F7E9822514be443A4800529;
+    address public constant USDT = 0xfD086BC7cD4c4ca33BD5C38ec837347e8A75A05d;
+    address public constant ARB = 0x912CE59144191C1204E64559FE8253a0e49E6548;
+    address public constant LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
+    address public constant RETH = 0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8;
 
     function setUp() public {
         uint256 forkId = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
@@ -54,71 +37,51 @@ contract TremorTest is Test {
         // pool = IPool(deployer.getPool());
         pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
 
-        // FIND MAX FLASH-LOANABLE AMOUNTS OF ALL FLASHLOANABLE TOKENS
-
-        // Get the LINK token address from the deployer instead of using a constant
-        // LINK = deployer.linkToken();
-        // LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
-        // WETH: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1 -14784450271841927598027 = 14784
-        // aWETH: 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8
-        // WBTC: 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f - 330421334539 = 3300
-        // aWBTC: 0x078f358208685046a11C85e8ad32895DED33A249
-        // weETH: 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe
-        // aweETH: 0x8437d7C167dFB82ED4Cb79CD44B7a32A1dd95c77
-        LINK = 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe;
-        aLINK = 0x8437d7C167dFB82ED4Cb79CD44B7a32A1dd95c77;
-        linkToken = IERC20(LINK);
-        console.log("Flash-loanable:", IERC20(LINK).balanceOf(aLINK));
-
         // Deploy Tremor
         // tremor = new Tremor(address(deployer.getAddressesProvider()), address(pool));
         tremor = new Tremor(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool));
 
-        // No need for vm.etch since we're using the already deployed MockERC20
-
         // Set up labels for better trace outputs
         vm.label(address(pool), "AAVE_POOL");
-        vm.label(LINK, "LINK");
     }
 
-    function test_callSingleFlashLoan() public {
-        uint256 amount = 3000 * 1e8; // 1000 LINK tokens
-        // uint256 amount = 100239444798603839364697;
-
-        // Supply some LINK to the pool first
-        // deal(LINK, address(this), amount * 2);
-        // IERC20(LINK).approve(address(pool), type(uint256).max);
-        // pool.supply(LINK, amount * 2, address(this), 0);
-
-        // Get the aToken address for LINK
-        DataTypes.ReserveData memory reserveData = pool.getReserveData(LINK);
-        address aTokenAddress = reserveData.aTokenAddress;
-        // Get total supply of aTokens which represents total LINK in pool
-        uint256 totalLinkInPool = IERC20(aTokenAddress).totalSupply();
-        console.log("Total LINK in pool:", totalLinkInPool);
-
-        // Fund Tremor contract with fee amount (0.05%)
-        // uint256 fee = (amount * 5) / 100;
-        uint256 fee = (amount * 5) / 10000;
-        deal(LINK, address(tremor), fee);
-
+    function test_callFlashLoan() public {
         console.log("FLASHLOAN_PREMIUM_TO_PROTOCOL:", pool.FLASHLOAN_PREMIUM_TO_PROTOCOL());
         console.log("FLASHLOAN_PREMIUM_TOTAL:", pool.FLASHLOAN_PREMIUM_TOTAL());
 
-        // // Get the pool configurator address
-        // address poolConfigurator = IPoolAddressesProvider(deployer.getAddressesProvider()).getPoolConfigurator();
-        // // Impersonate pool configurator to update flash loan premiums
-        // vm.prank(poolConfigurator);
-        // pool.updateFlashloanPremiums(5, 5);
+        address[] memory assets = new address[](8);
+        assets[0] = WETH; // WETH on Arbitrum
+        assets[1] = WBTC; // WBTC on Arbitrum
+        assets[2] = USDC; // weETH on Arbitrum
+        assets[3] = WE_ETH; // USDC on Arbitrum
+        assets[4] = WSTETH; // USDT on Arbitrum
+        assets[5] = ARB; // DAI on Arbitrum
+        assets[6] = LINK; // LINK on Arbitrum
+        assets[7] = RETH; // rETH on Arbitrum
+        uint256[] memory amounts = new uint256[](8);
 
-        // Approve pool to spend tokens
-        // IERC20(LINK).approve(address(pool), type(uint256).max);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < assets.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            // amounts[i] = assets[i] == USDC ? maxFlashloanable - 6_000_000 : maxFlashloanable - 1;
+            if (assets[i] == USDC) {
+                amounts[i] = maxFlashloanable - 50_000_000;
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        // Fund Tremor contract with fee amount (0.05%) for each asset
+        for (uint256 i = 0; i < assets.length; i++) {
+            uint256 fee = (amounts[i] * 10) / 10000; // 0.05%
+            deal(assets[i], address(tremor), fee);
+        }
 
         vm.recordLogs();
 
-        try tremor.callSingleFlashLoan(LINK, amount) {
+        try tremor.callFlashLoan(assets, amounts) {
             console.log("Flash loan succeeded");
-            console.log("Final LINK balance:", IERC20(LINK).balanceOf(address(tremor)));
         } catch (bytes memory err) {
             console.log("Flash loan failed");
             console.logBytes(err);
@@ -145,3 +108,53 @@ contract TremorTest is Test {
 
     event Debug(string message, bytes data);
 }
+
+// MAX FLASH-LOANABLE AMOUNTS OF ALL FLASHLOANABLE TOKENS //////////////////////////////
+// WETH: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1 -14784450271841927598027 = 14784
+// aWETH: 0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8
+// WBTC: 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f - 330421334539 = 3304
+// aWBTC: 0x078f358208685046a11C85e8ad32895DED33A249
+// weETH: 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe - 81108159289949938640504 = 81108
+// aweETH: 0x8437d7C167dFB82ED4Cb79CD44B7a32A1dd95c77
+// USDC: 0xaf88d065e77c8cC2239327C5EDb3A432268e5831 - 15171759807546 = 15171759
+// aUSDC: 0x724dc807b04555b71ed48a6896b6F41593b8C637
+// wstETH: 0x5979D7b546E38E414F7E9822514be443A4800529 - 35759499332743020693286 = 35759
+// awstETH: 0x513c7E3a9c69cA3e22550eF58AC1C0088e918FFf
+// USDT: 0xFd086bC7CD4C4Ca33BD5c38ec837347E8a75a05D - 7323203490740 = 7323203
+// aUSDT: 0x6ab707Aca953eDAeFBc4fD23bA73294241490620
+// ARB: 0x912CE59144191C1204E64559FE8253a0e49E6548 - 54715222330715085671344780 = 54715222
+// aARB: 0x6533afac2E7BCCB20dca161449A13A32D391fb00
+// LINK: 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4 - 1818953354647390052558848 = 1818953
+// aLINK: 0x191c10Aa4AF7C30e871E70C95dB0E4eb77237530
+// rETH: 0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8 - 3071942616877375984586 = 3071
+// arETH: 0x8Eb270e296023E9D92081fdF967dDd7878724424
+
+// // Get the pool configurator address
+// address poolConfigurator = IPoolAddressesProvider(deployer.getAddressesProvider()).getPoolConfigurator();
+// // Impersonate pool configurator to update flash loan premiums
+// vm.prank(poolConfigurator);
+// pool.updateFlashloanPremiums(5, 5);
+
+// contract MockERC20 {
+//     mapping(address => uint256) public balanceOf;
+//     mapping(address => mapping(address => uint256)) public allowance;
+
+//     function approve(address spender, uint256 amount) public returns (bool) {
+//         allowance[msg.sender][spender] = amount;
+//         return true;
+//     }
+
+//     function transfer(address to, uint256 amount) public returns (bool) {
+//         balanceOf[msg.sender] -= amount;
+//         balanceOf[to] += amount;
+//         return true;
+//     }
+
+//     function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+//         require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
+//         allowance[from][msg.sender] -= amount;
+//         balanceOf[from] -= amount;
+//         balanceOf[to] += amount;
+//         return true;
+//     }
+// }
