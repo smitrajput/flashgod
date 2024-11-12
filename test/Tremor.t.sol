@@ -13,7 +13,6 @@ import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTy
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
-    DeployAaveV3 public deployer;
 
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
@@ -28,10 +27,6 @@ contract TremorTest is Test {
     function setUp() public {
         uint256 forkId = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
         vm.selectFork(forkId);
-
-        // Deploy AAVE V3
-        // deployer = new DeployAaveV3();
-        // deployer.run();
 
         // Get the deployed pool address from the deployer
         // pool = IPool(deployer.getPool());
