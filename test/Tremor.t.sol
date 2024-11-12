@@ -9,10 +9,16 @@ import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol"; // Add this import
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import {PairFlash} from "../src/PairFlash.sol";
+import {PairFlash2} from "../src/PairFlash2.sol";
 
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
+    ISwapRouter public swapRouter;
+    PairFlash2 public pairFlash2;
+    PairFlash public pairFlash;
 
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
@@ -28,13 +34,29 @@ contract TremorTest is Test {
         uint256 forkId = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
         vm.selectFork(forkId);
 
+        swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+        pairFlash2 = new PairFlash2(
+            swapRouter, 0x1F98431c8aD98523631AE4a59f267346ea31F984, 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+        );
+        pairFlash = new PairFlash(
+            swapRouter,
+            0x1F98431c8aD98523631AE4a59f267346ea31F984,
+            0x82aF49447D8a07e3bd95BD0d56f35241523fBab1,
+            payable(address(pairFlash2))
+        );
+
         // Get the deployed pool address from the deployer
         // pool = IPool(deployer.getPool());
         pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
 
         // Deploy Tremor
         // tremor = new Tremor(address(deployer.getAddressesProvider()), address(pool));
-        tremor = new Tremor(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool));
+        tremor = new Tremor(
+            0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb,
+            address(pool),
+            payable(address(pairFlash)),
+            payable(address(pairFlash2))
+        );
 
         // Set up labels for better trace outputs
         vm.label(address(pool), "AAVE_POOL");
