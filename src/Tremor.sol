@@ -20,8 +20,8 @@ contract Tremor is IFlashLoanReceiver {
     address payable public pairFlash2;
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    address public constant USDC = 0xaf88D065E77c8cC223932706bE5459603282E01F;
-    address public constant factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    address public constant FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     address[] public assets;
 
     uint256 public wbtcBalance;
@@ -54,20 +54,13 @@ contract Tremor is IFlashLoanReceiver {
         console.log("FLASHLOAN RECEIVED");
         assets = _assets;
 
-        for (uint256 i = 0; i < _assets.length; i++) {
-            console.log(
-                IERC20Metadata(_assets[i]).symbol(),
-                IERC20(_assets[i]).balanceOf(address(this)) / (10 ** IERC20Metadata(_assets[i]).decimals())
-            );
-        }
-
         wbtcBalance = IERC20(WBTC).balanceOf(address(this));
         usdcBalance = IERC20(USDC).balanceOf(address(this));
         wethBalance = IERC20(WETH).balanceOf(address(this));
 
         // initiate uniV3 flash loans
         IUniswapV3Pool pool = IUniswapV3Pool(
-            PoolAddress.computeAddress(factory, PoolAddress.PoolKey({token0: WBTC, token1: WETH, fee: 500}))
+            PoolAddress.computeAddress(FACTORY, PoolAddress.PoolKey({token0: WBTC, token1: WETH, fee: 500}))
         );
 
         PairFlash(pairFlash).initFlash(

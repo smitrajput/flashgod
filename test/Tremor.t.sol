@@ -86,7 +86,7 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
         // Fund Tremor contract with fee amount (0.05%) for each asset
