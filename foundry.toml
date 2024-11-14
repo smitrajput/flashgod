@@ -8,7 +8,7 @@ remappings = [
     "@uniswap/v3-core/=lib/v3-core/",
     "@uniswap/v3-periphery/=lib/v3-periphery/"
 ]
-evm_version = "shanghai"
+evm_version = "cancun"
 
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"

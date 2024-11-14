@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.10;
 
-import {Test, console, Vm} from "forge-std/Test.sol";
 import {Tremor} from "../src/Tremor.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -10,15 +9,16 @@ import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol"; // Add this import
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import {PairFlash} from "../src/PairFlash.sol";
-import {PairFlash2} from "../src/PairFlash2.sol";
+import {Pair1Flash} from "../src/Pair1Flash.sol";
+import {Pair2Flash} from "../src/Pair2Flash.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
     ISwapRouter public swapRouter;
-    PairFlash2 public pairFlash2;
-    PairFlash public pairFlash;
+    Pair1Flash public pair1Flash;
+    Pair2Flash public pair2Flash;
 
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
@@ -35,14 +35,14 @@ contract TremorTest is Test {
         vm.selectFork(forkId);
 
         swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-        pairFlash2 = new PairFlash2(
+        pair2Flash = new Pair2Flash(
             swapRouter, 0x1F98431c8aD98523631AE4a59f267346ea31F984, 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
         );
-        pairFlash = new PairFlash(
+        pair1Flash = new Pair1Flash(
             swapRouter,
             0x1F98431c8aD98523631AE4a59f267346ea31F984,
             0x82aF49447D8a07e3bd95BD0d56f35241523fBab1,
-            payable(address(pairFlash2))
+            payable(address(pair2Flash))
         );
 
         // Get the deployed pool address from the deployer
@@ -54,15 +54,15 @@ contract TremorTest is Test {
         tremor = new Tremor(
             0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb,
             address(pool),
-            payable(address(pairFlash)),
-            payable(address(pairFlash2))
+            payable(address(pair1Flash)),
+            payable(address(pair2Flash))
         );
 
         // Set up labels for better trace outputs
         vm.label(address(pool), "AAVE_POOL");
     }
 
-    function test_callFlashLoan() public {
+    function test_dominoeFlashLoans() public {
         console.log("FLASHLOAN_PREMIUM_TO_PROTOCOL:", pool.FLASHLOAN_PREMIUM_TO_PROTOCOL());
         console.log("FLASHLOAN_PREMIUM_TOTAL:", pool.FLASHLOAN_PREMIUM_TOTAL());
 
@@ -80,7 +80,6 @@ contract TremorTest is Test {
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
             maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
-            // amounts[i] = assets[i] == USDC ? maxFlashloanable - 6_000_000 : maxFlashloanable - 1;
             if (assets[i] == USDC) {
                 amounts[i] = maxFlashloanable - 50_000_000;
             } else {
@@ -97,7 +96,7 @@ contract TremorTest is Test {
 
         vm.recordLogs();
 
-        try tremor.callFlashLoan(assets, amounts) {
+        try tremor.dominoeFlashLoans(assets, amounts) {
             console.log("Flash loan succeeded");
         } catch (bytes memory err) {
             console.log("Flash loan failed");
