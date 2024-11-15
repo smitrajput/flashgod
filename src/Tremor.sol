@@ -28,8 +28,6 @@ interface IPair1Flash {
 contract Tremor is IFlashLoanReceiver {
     address internal _addressesProvider;
     address internal _pool;
-    address payable internal _pair1Flash;
-    address payable internal _pair2Flash;
     // only for logging assistance in fire()
     address[] internal _assets;
 
@@ -38,11 +36,9 @@ contract Tremor is IFlashLoanReceiver {
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address internal constant _FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
-    constructor(address addressesProvider_, address pool_, address payable pair1Flash_, address payable pair2Flash_) {
+    constructor(address addressesProvider_, address pool_) {
         _addressesProvider = addressesProvider_;
         _pool = pool_;
-        _pair1Flash = pair1Flash_;
-        _pair2Flash = pair2Flash_;
     }
 
     function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
@@ -54,24 +50,41 @@ contract Tremor is IFlashLoanReceiver {
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
     }
 
+    function dominoeFlashLoans(address[] calldata assets_, uint256[] calldata amounts_, address pair1Flash_, address pair2Flash_) external {
+        assembly {
+            tstore(0x00, pair1Flash_)
+            tstore(0x20, pair2Flash_)
+        }
+
+        console.log("Approving tokens...");
+        for (uint256 i = 0; i < assets_.length; ++i) {
+            IERC20(assets_[i]).approve(address(this.POOL()), type(uint256).max);
+        }
+
+        uint256[] memory interestRateModes = new uint256[](assets_.length);
+        console.log("Calling AAVE flash loan...");
+        this.POOL().flashLoan(address(this), assets_, amounts_, interestRateModes, address(0), bytes(""), 0);
+    }
+
     function executeOperation(
         address[] calldata assets_,
-        uint256[] calldata amounts_, // yet to be used
+        uint256[] calldata amounts_,
         uint256[] calldata premiums_,
         address initiator_,
         bytes calldata params_
     ) external returns (bool) {
         console.log("FLASHLOAN RECEIVED");
-        _assets = assets_;
 
+        address pair1Flash;
         uint256 wbtcBalance = IERC20(_WBTC).balanceOf(address(this));
         uint256 usdcBalance = IERC20(_USDC).balanceOf(address(this));
         uint256 wethBalance = IERC20(_WETH).balanceOf(address(this));
 
         assembly {
-            tstore(0x00, wbtcBalance)
-            tstore(0x20, usdcBalance)
-            tstore(0x40, wethBalance)
+            pair1Flash := tload(0x00)
+            tstore(0x40, wbtcBalance)
+            tstore(0x60, usdcBalance)
+            tstore(0x80, wethBalance)
         }
 
         // initiate uniV3 flash loans
@@ -79,7 +92,7 @@ contract Tremor is IFlashLoanReceiver {
             PoolAddress.computeAddress(_FACTORY, PoolAddress.PoolKey({token0: _WBTC, token1: _WETH, fee: 500}))
         );
 
-        IPair1Flash(_pair1Flash).initFlash(
+        IPair1Flash(pair1Flash).initFlash(
             IPair1Flash.FlashParams({
                 token0: _WBTC, // could avoid hardcoding tokens here
                 token1: _WETH, // could avoid hardcoding tokens here
@@ -111,27 +124,19 @@ contract Tremor is IFlashLoanReceiver {
         // do interesting stuff here with ~$1B of flashloaned money
 
         // Return the difference between current balances and initial balances back to PairFlash2
+        address pair2Flash;
         uint256 wbtcBalance;
         uint256 usdcBalance;
         uint256 wethBalance;
         assembly {
-            wbtcBalance := tload(0x00)
-            usdcBalance := tload(0x20)
-            wethBalance := tload(0x40)
+            pair2Flash := tload(0x20)
+            wbtcBalance := tload(0x40)
+            usdcBalance := tload(0x60)
+            wethBalance := tload(0x80)
         }
 
-        TransferHelper.safeTransfer(_USDC, _pair2Flash, IERC20(_USDC).balanceOf(address(this)) - usdcBalance);
-        TransferHelper.safeTransfer(_WBTC, _pair2Flash, IERC20(_WBTC).balanceOf(address(this)) - wbtcBalance);
-        TransferHelper.safeTransfer(_WETH, _pair2Flash, IERC20(_WETH).balanceOf(address(this)) - wethBalance);
-    }
-
-    function dominoeFlashLoans(address[] calldata assets_, uint256[] calldata amounts_) external {
-        console.log("Approving tokens...");
-        for (uint256 i = 0; i < assets_.length; ++i) {
-            IERC20(assets_[i]).approve(address(this.POOL()), type(uint256).max);
-        }
-        uint256[] memory interestRateModes = new uint256[](assets_.length);
-        console.log("Calling AAVE flash loan...");
-        this.POOL().flashLoan(address(this), assets_, amounts_, interestRateModes, address(0), bytes(""), 0);
+        TransferHelper.safeTransfer(_USDC, pair2Flash, IERC20(_USDC).balanceOf(address(this)) - usdcBalance);
+        TransferHelper.safeTransfer(_WBTC, pair2Flash, IERC20(_WBTC).balanceOf(address(this)) - wbtcBalance);
+        TransferHelper.safeTransfer(_WETH, pair2Flash, IERC20(_WETH).balanceOf(address(this)) - wethBalance);
     }
 }
