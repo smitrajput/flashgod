@@ -46,24 +46,64 @@ contract Tremor is IFlashLoanReceiver {
     }
 
     function POOL() external view override returns (IPool) {
+        // could possibly eliminate _pool state variable using this
         return IPool(_pool);
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
     }
 
-    function dominoeFlashLoans(address[] calldata assets_, uint256[] calldata amounts_, address pair1Flash_, address pair2Flash_) external {
+    function dominoeFlashLoans(
+        address[] calldata assets_,
+        uint256[] calldata amounts_,
+        address pair1Flash_,
+        address pair2Flash_
+    ) external {
         assembly {
             tstore(0x00, pair1Flash_)
             tstore(0x20, pair2Flash_)
         }
 
-        console.log("Approving tokens...");
-        for (uint256 i = 0; i < assets_.length; ++i) {
-            IERC20(assets_[i]).approve(address(this.POOL()), type(uint256).max);
-        }
+        _assets = assets_;
 
-        uint256[] memory interestRateModes = new uint256[](assets_.length);
-        console.log("Calling AAVE flash loan...");
-        this.POOL().flashLoan(address(this), assets_, amounts_, interestRateModes, address(0), bytes(""), 0);
+        console.log("Approving tokens...");
+        assembly {
+            let end := add(assets_.offset, shl(5, assets_.length))
+            mstore(0x00, 0x095ea7b3) // selector for approve(address,uint256)
+            mstore(0x20, and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff)) // need to mask off first 12 bytes from _pool.slot
+            mstore(0x40, not(0)) // type(uint256).max approved
+
+            for { let i := assets_.offset } lt(i, end) { i := add(i, 0x20) } {
+                let success := call(gas(), calldataload(i), 0, 0x1C, 0x44, 0x60, 0x00)
+                if iszero(success) { revert(0x00, 0x00) }
+            }
+
+            let interestRateModes
+            mstore(interestRateModes, assets_.length)
+            for { let i := 0 } lt(i, assets_.length) { i := add(i, 1) } {
+                mstore(add(interestRateModes, mul(i, 0x20)), 0) // Assuming all interestRateModes are 0 for simplicity
+            }
+
+            let data
+            mstore(data, 0x5cffe9de) // selector for flashLoan(address,address[],uint256[],uint256[],address,bytes,uint256)
+            mstore(add(data, 0x20), address()) // need to mask off first 12 bytes from _pool.slot
+            mstore(add(data, 0x40), assets_.offset) // assets
+            mstore(add(data, 0x60), amounts_.offset) // amounts
+            mstore(add(data, 0x80), interestRateModes) // interestRateModes
+            mstore(add(data, 0xA0), 0) // onBehalfOf
+            mstore(add(data, 0xC0), 0) // params
+            mstore(add(data, 0xE0), 0) // referralCode
+
+            let success :=
+                call(
+                    gas(),
+                    and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff),
+                    0,
+                    add(data, 0x1C),
+                    0xE4,
+                    0,
+                    0
+                )
+            if iszero(success) { revert(0, 0) }
+        }
     }
 
     function executeOperation(
