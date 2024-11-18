@@ -2,7 +2,8 @@
 pragma solidity ^0.8.10;
 
 import {Tremor} from "../src/Tremor.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
@@ -19,6 +20,8 @@ contract TremorTest is Test {
     ISwapRouter public swapRouter;
     Pair1Flash public pair1Flash;
     Pair2Flash public pair2Flash;
+
+    address public constant VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
@@ -51,14 +54,23 @@ contract TremorTest is Test {
 
         // Deploy Tremor
         // tremor = new Tremor(address(deployer.getAddressesProvider()), address(pool));
-        tremor = new Tremor(
-            0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb,
-            address(pool)
-        );
+        tremor = new Tremor(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool));
 
         // Set up labels for better trace outputs
         vm.label(address(pool), "AAVE_POOL");
     }
+
+    // function test_makeFlashLoan() public {
+    //     IERC20[] memory assets = new IERC20[](3);
+    //     assets[0] = IERC20(WBTC);
+    //     assets[1] = IERC20(WETH);
+    //     assets[2] = IERC20(USDC);
+    //     uint256[] memory amounts = new uint256[](3);
+    //     amounts[0] = IERC20(WBTC).balanceOf(VAULT); //  - 10 ** IERC20Metadata(WBTC).decimals()
+    //     amounts[1] = IERC20(WETH).balanceOf(VAULT);
+    //     amounts[2] = IERC20(USDC).balanceOf(VAULT);
+    //     tremor.makeFlashLoan(assets, amounts, bytes(""));
+    // }
 
     function test_dominoeFlashLoans() public {
         console.log("FLASHLOAN_PREMIUM_TO_PROTOCOL:", pool.FLASHLOAN_PREMIUM_TO_PROTOCOL());
@@ -92,9 +104,20 @@ contract TremorTest is Test {
             deal(assets[i], address(tremor), fee);
         }
 
+        address[] memory balancerAssets = new address[](3);
+        balancerAssets[0] = WBTC;
+        balancerAssets[1] = WETH;
+        balancerAssets[2] = USDC;
+
+        address[] memory uniswapAssets = new address[](2);
+        uniswapAssets[0] = WETH;
+        uniswapAssets[1] = USDC;
+
         vm.recordLogs();
 
-        try tremor.dominoeFlashLoans(assets, amounts, address(pair1Flash), address(pair2Flash)) {
+        try tremor.dominoeFlashLoans(
+            assets, amounts, balancerAssets, uniswapAssets, address(pair1Flash), address(pair2Flash)
+        ) {
             console.log("Flash loan succeeded");
         } catch (bytes memory err) {
             console.log("Flash loan failed");

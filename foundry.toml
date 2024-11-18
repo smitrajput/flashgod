@@ -6,7 +6,9 @@ remappings = [
     "@aave/core-v3/=lib/aave-v3-core/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
     "@uniswap/v3-core/=lib/v3-core/",
-    "@uniswap/v3-periphery/=lib/v3-periphery/"
+    "@uniswap/v3-periphery/=lib/v3-periphery/",
+    "@solady/=lib/solady/",
+    "@balancer-labs/v2-interfaces/=lib/balancer-v2-monorepo/pkg/interfaces/"
 ]
 evm_version = "cancun"
 

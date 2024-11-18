@@ -4,11 +4,14 @@ pragma solidity ^0.8.10;
 import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {IFlashLoanSimpleReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IFlashLoanReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanReceiver.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {TransferHelper} from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+import {IVault} from "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
+import {IFlashLoanRecipient} from "@balancer-labs/v2-interfaces/contracts/vault/IFlashLoanRecipient.sol";
+import {IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import {Test, console, Vm} from "forge-std/Test.sol";
 
 interface IPair1Flash {
@@ -25,9 +28,10 @@ interface IPair1Flash {
     function initFlash(FlashParams memory params, address _tremor) external;
 }
 
-contract Tremor is IFlashLoanReceiver {
+contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
     address internal _addressesProvider;
     address internal _pool;
+    IVault internal _vault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
     // only for logging assistance in fire()
     address[] internal _assets;
 
@@ -35,7 +39,6 @@ contract Tremor is IFlashLoanReceiver {
     address internal constant _WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address internal constant _FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
-    Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     constructor(address addressesProvider_, address pool_) {
         _addressesProvider = addressesProvider_;
@@ -52,9 +55,51 @@ contract Tremor is IFlashLoanReceiver {
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
     }
 
+    function makeFlashLoan(IERC20[] memory tokens_, uint256[] memory amounts_, bytes memory userData_) external {
+        _vault.flashLoan(this, tokens_, amounts_, userData_);
+    }
+
+    function receiveFlashLoan(
+        IERC20[] memory tokens_,
+        uint256[] memory amounts_,
+        uint256[] memory feeAmounts_,
+        bytes memory userData_
+    ) external override {
+        require(msg.sender == address(_vault));
+
+        // This contract now has the funds requested.
+
+        // Your logic goes here...
+        for (uint256 i = 0; i < tokens_.length; i++) {
+            console.log(
+                "Balance of token",
+                IERC20Metadata(address(tokens_[i])).symbol(),
+                "is",
+                tokens_[i].balanceOf(address(this))
+            );
+        }
+
+        for (uint256 i = 0; i < tokens_.length; i++) {
+            uint256 currentBalance = tokens_[i].balanceOf(address(this));
+            deal(address(tokens_[i]), address(this), currentBalance + feeAmounts_[i]);
+        }
+
+        console.log("Approving balancer tokens...");
+        for (uint256 i = 0; i < tokens_.length; ++i) {
+            tokens_[i].approve(address(_vault), type(uint256).max);
+        }
+
+        // Return loan
+        for (uint256 i = 0; i < tokens_.length; i++) {
+            tokens_[i].transfer(address(_vault), amounts_[i] + feeAmounts_[i]);
+        }
+    }
+
     function dominoeFlashLoans(
-        address[] calldata assets_,
-        uint256[] calldata amounts_,
+        address[] calldata aaveAssets_,
+        uint256[] calldata aaveAmounts_,
+        address[] calldata balancerAssets_,
+        address[] calldata uniswapAssets_,
         address pair1Flash_,
         address pair2Flash_
     ) external {
@@ -62,63 +107,25 @@ contract Tremor is IFlashLoanReceiver {
             tstore(0x00, pair1Flash_)
             tstore(0x20, pair2Flash_)
         }
-
-        _assets = assets_;
+        _assets = aaveAssets_;
 
         console.log("Approving tokens...");
-        assembly {
-            let end := add(assets_.offset, shl(5, assets_.length))
-            let approveCallData
-            mstore(approveCallData, 0x095ea7b3) // selector for approve(address,uint256)
-            mstore(add(approveCallData, 0x20), and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff)) // need to mask off first 12 bytes from _pool.slot
-            mstore(add(approveCallData, 0x40), not(0)) // type(uint256).max approved
-
-            for { let i := assets_.offset } lt(i, end) { i := add(i, 0x20) } {
-                let success := call(gas(), calldataload(i), 0, add(approveCallData, 0x1C), 0x64, 0x60, 0x00)
-                if iszero(success) { revert(0x00, 0x00) }
-            }
-            // mstore(0x40, 0x00)
+        for (uint256 i = 0; i < aaveAssets_.length; ++i) {
+            IERC20(aaveAssets_[i]).approve(_pool, type(uint256).max);
         }
-        vm.breakpoint("ello bug");
-        assembly {
-            // Setup memory for interestRateModes array
-            let interestRateModes := mload(0x40)
 
-            // Store array length
-            mstore(interestRateModes, assets_.length)
-            interestRateModes := add(interestRateModes, 0x20)
+        uint256[] memory interestRateModes = new uint256[](aaveAssets_.length);
 
-            // Fill array with zeros
-            for { let i := 0 } lt(i, assets_.length) { i := add(i, 1) } {
-                mstore(interestRateModes, 0)
-                interestRateModes := add(interestRateModes, 0x20)
-            }
-
-            // Update free memory pointer
-            mstore(0x40, interestRateModes)
-
-            let data := interestRateModes
-            mstore(data, 0x5cffe9de) // selector for flashLoan(address,address[],uint256[],uint256[],address,bytes,uint256)
-            mstore(add(data, 0x20), address()) // need to mask off first 12 bytes from _pool.slot
-            mstore(add(data, 0x40), assets_.offset) // assets
-            mstore(add(data, 0x60), amounts_.offset) // amounts
-            mstore(add(data, 0x80), interestRateModes) // interestRateModes
-            mstore(add(data, 0xA0), 0) // onBehalfOf
-            mstore(add(data, 0xC0), 0) // params
-            mstore(add(data, 0xE0), 0) // referralCode
-
-            let success :=
-                call(
-                    gas(),
-                    and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff),
-                    0,
-                    add(data, 0x1C),
-                    0xe4,
-                    0,
-                    0
-                )
-            if iszero(success) { revert(0, 0) }
-        }
+        console.log("Calling AAVE flash loan...");
+        IPool(_pool).flashLoan(
+            address(this),
+            aaveAssets_,
+            aaveAmounts_,
+            interestRateModes,
+            address(0),
+            abi.encode(balancerAssets_, uniswapAssets_),
+            0
+        );
     }
 
     function executeOperation(
@@ -140,6 +147,18 @@ contract Tremor is IFlashLoanReceiver {
             tstore(0x40, wbtcBalance)
             tstore(0x60, usdcBalance)
             tstore(0x80, wethBalance)
+        }
+
+        (address[] memory balancerAssets_, address[] memory uniswapAssets_) =
+            abi.decode(params_, (address[], address[]));
+
+        console.log("Balancer Assets:");
+        for (uint256 i = 0; i < balancerAssets_.length; i++) {
+            console.log(balancerAssets_[i]);
+        }
+        console.log("Uniswap Assets:");
+        for (uint256 i = 0; i < uniswapAssets_.length; i++) {
+            console.log(uniswapAssets_[i]);
         }
 
         // initiate uniV3 flash loans
