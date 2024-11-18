@@ -9,7 +9,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {TransferHelper} from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 
 interface IPair1Flash {
     struct FlashParams {
@@ -35,6 +35,7 @@ contract Tremor is IFlashLoanReceiver {
     address internal constant _WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address internal constant _FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     constructor(address addressesProvider_, address pool_) {
         _addressesProvider = addressesProvider_;
@@ -67,22 +68,36 @@ contract Tremor is IFlashLoanReceiver {
         console.log("Approving tokens...");
         assembly {
             let end := add(assets_.offset, shl(5, assets_.length))
-            mstore(0x00, 0x095ea7b3) // selector for approve(address,uint256)
-            mstore(0x20, and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff)) // need to mask off first 12 bytes from _pool.slot
-            mstore(0x40, not(0)) // type(uint256).max approved
+            let approveCallData
+            mstore(approveCallData, 0x095ea7b3) // selector for approve(address,uint256)
+            mstore(add(approveCallData, 0x20), and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff)) // need to mask off first 12 bytes from _pool.slot
+            mstore(add(approveCallData, 0x40), not(0)) // type(uint256).max approved
 
             for { let i := assets_.offset } lt(i, end) { i := add(i, 0x20) } {
-                let success := call(gas(), calldataload(i), 0, 0x1C, 0x44, 0x60, 0x00)
+                let success := call(gas(), calldataload(i), 0, add(approveCallData, 0x1C), 0x64, 0x60, 0x00)
                 if iszero(success) { revert(0x00, 0x00) }
             }
+            // mstore(0x40, 0x00)
+        }
+        vm.breakpoint("ello bug");
+        assembly {
+            // Setup memory for interestRateModes array
+            let interestRateModes := mload(0x40)
 
-            let interestRateModes
+            // Store array length
             mstore(interestRateModes, assets_.length)
+            interestRateModes := add(interestRateModes, 0x20)
+
+            // Fill array with zeros
             for { let i := 0 } lt(i, assets_.length) { i := add(i, 1) } {
-                mstore(add(interestRateModes, mul(i, 0x20)), 0) // Assuming all interestRateModes are 0 for simplicity
+                mstore(interestRateModes, 0)
+                interestRateModes := add(interestRateModes, 0x20)
             }
 
-            let data
+            // Update free memory pointer
+            mstore(0x40, interestRateModes)
+
+            let data := interestRateModes
             mstore(data, 0x5cffe9de) // selector for flashLoan(address,address[],uint256[],uint256[],address,bytes,uint256)
             mstore(add(data, 0x20), address()) // need to mask off first 12 bytes from _pool.slot
             mstore(add(data, 0x40), assets_.offset) // assets
@@ -98,7 +113,7 @@ contract Tremor is IFlashLoanReceiver {
                     and(sload(_pool.slot), 0xffffffffffffffffffffffffffffffffffffffff),
                     0,
                     add(data, 0x1C),
-                    0xE4,
+                    0xe4,
                     0,
                     0
                 )
