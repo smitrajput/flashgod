@@ -9,9 +9,12 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {TransferHelper} from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {IVault} from "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
 import {IFlashLoanRecipient} from "@balancer-labs/v2-interfaces/contracts/vault/IFlashLoanRecipient.sol";
 import {IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
+import {Pair1Flash} from "./Pair1Flash.sol";
+
 import {Test, console, Vm} from "forge-std/Test.sol";
 
 interface IPair1Flash {
@@ -32,15 +35,15 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
     address internal _addressesProvider;
     address internal _pool;
     IVault internal _vault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+    ISwapRouter internal _swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
     // only for logging assistance in fire()
     address[] internal _assets;
+    UniFlashLoanBalances[] internal _uniFlashLoanBalances;
 
     address internal constant _WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
     address internal constant _WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address internal constant _FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
-
-    UniFlashLoanBalances[] internal _uniFlashLoanBalances;
 
     struct UniFlashLoanBalances {
         address pairFlash;
@@ -90,11 +93,12 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         }
 
         address pair1Flash;
-        assembly {
-            pair1Flash := tload(0x00)
-        }
-        {
-            bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
+        // assembly {
+        //     pair1Flash := tload(0x00)
+        // }
+        bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
+        if (uniPools.length > 0) {
+            pair1Flash = address(new Pair1Flash(_swapRouter, _FACTORY, _WETH));
             (address tokenA, address tokenB, uint16 feeAB) = abi.decode(uniPools[0], (address, address, uint16));
 
             // initiate uniV3 flash loans
@@ -113,7 +117,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
                     fee3: 10000
                 }),
                 address(this),
-                uniPools[1]
+                uniPools,
+                1
             );
         }
 
@@ -132,10 +137,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         address pair1Flash_,
         address pair2Flash_
     ) external {
-        assembly {
-            tstore(0x00, pair1Flash_)
-            tstore(0x20, pair2Flash_)
-        }
+        // assembly {
+        //     tstore(0x00, pair1Flash_)
+        //     tstore(0x20, pair2Flash_)
+        // }
         _assets = aaveAssets_;
 
         console.log("Approving tokens...");
@@ -166,11 +171,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         bytes calldata params_
     ) external returns (bool) {
         console.log("FLASHLOAN RECEIVED");
-
-        address pair1Flash;
-        assembly {
-            pair1Flash := tload(0x00)
-        }
 
         (address[] memory balancerAssets, bytes[] memory uniPools) = abi.decode(params_, (address[], bytes[]));
 

@@ -44,19 +44,13 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
 
+    address internal _nextPair1Flash;
+
     ISwapRouter internal immutable _swapRouter;
     IPair2Flash internal immutable _pair2Flash;
     address internal immutable _factory;
 
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-
-    constructor(ISwapRouter swapRouter_, address factory_, address WETH9_, address payable pair2Flash_)
-        PeripheryImmutableState(factory_, WETH9_)
-    {
-        _swapRouter = swapRouter_;
-        _factory = factory_;
-        _pair2Flash = IPair2Flash(pair2Flash_);
-    }
 
     // fee1 is the fee of the pool from the initial borrow
     // fee2 is the fee of the first pool to arb from
@@ -82,12 +76,30 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         PoolAddress.PoolKey poolKey;
     }
 
-    function initFlash(FlashParams calldata params_, address tremor_, bytes calldata nextPool_) external {
+    constructor(ISwapRouter swapRouter_, address factory_, address WETH9_) PeripheryImmutableState(factory_, WETH9_) {
+        _swapRouter = swapRouter_;
+        _factory = factory_;
+        // _pair2Flash = IPair2Flash(pair2Flash_);
+    }
+
+    function initFlash(
+        FlashParams calldata params_,
+        address tremor_,
+        bytes[] calldata uniPools_,
+        uint256 nextPoolIndex_
+    ) external {
         assembly {
             tstore(0, tremor_)
-            tstore(0x20, calldataload(nextPool_.offset)) // tokenA
-            tstore(0x40, calldataload(add(nextPool_.offset, 0x20))) // tokenB
-            tstore(0x60, calldataload(add(nextPool_.offset, 0x40))) // feeAB
+        }
+
+        if (nextPoolIndex_ < uniPools_.length) {
+            assembly {
+                tstore(0x20, calldataload(uniPools_[nextPoolIndex_].offset)) // tokenA
+                tstore(0x40, calldataload(add(uniPools_[nextPoolIndex_].offset, 0x20))) // tokenB
+                tstore(0x60, calldataload(add(uniPools_[nextPoolIndex_].offset, 0x40))) // feeAB
+            }
+        } else {
+            return;
         }
         PoolAddress.PoolKey memory poolKey =
             PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
@@ -136,37 +148,45 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         deal(token1, address(this), IERC20(token1).balanceOf(address(this)) + fee1_);
 
         address tremor;
-        address tokenA;
-        address tokenB;
-        uint16 feeAB;
         assembly {
             tremor := tload(0)
-            tokenA := tload(0x20)
-            tokenB := tload(0x40)
-            feeAB := tload(0x60)
         }
 
         TransferHelper.safeTransfer(token0, tremor, decoded.amount0);
         TransferHelper.safeTransfer(token1, tremor, decoded.amount1);
         ITremor(tremor).registerUniFlashLoanBalances(address(this), token0, token1, decoded.amount0, decoded.amount1);
 
-        IUniswapV3Pool uniPool = IUniswapV3Pool(
-            PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB}))
-        );
-        _pair2Flash.initFlash(
-            IPair2Flash.FlashParams({
-                token0: tokenA,
-                token1: tokenB,
-                fee1: feeAB,
-                amount0: IERC20(tokenA).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
-                amount1: IERC20(tokenB).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
-                fee2: 3000,
-                fee3: 10000
-            }),
-            address(this),
-            tremor,
-            bytes("")
-        );
+        address tokenA;
+        address tokenB;
+        uint16 feeAB;
+        assembly {
+            tokenA := tload(0x20)
+            tokenB := tload(0x40)
+            feeAB := tload(0x60)
+        }
+        if (tokenA != address(0) && tokenB != address(0)) {
+            /* create Clone of this contract using Solady: https://github.com/Vectorized/solady/blob/main/src/utils/LibClone.sol*/
+            // _nextPair1Flash = address(new Pair1Flash(_swapRouter, _FACTORY, _WETH));            
+
+            
+            IUniswapV3Pool uniPool = IUniswapV3Pool(
+                PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB}))
+            );
+            _pair2Flash.initFlash(
+                IPair2Flash.FlashParams({
+                    token0: tokenA,
+                    token1: tokenB,
+                    fee1: feeAB,
+                    amount0: IERC20(tokenA).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
+                    amount1: IERC20(tokenB).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
+                    fee2: 3000,
+                    fee3: 10000
+                }),
+                address(this),
+                tremor,
+                bytes("")
+            );
+        }
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
