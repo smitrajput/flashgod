@@ -113,10 +113,14 @@ contract TremorTest is Test {
         uniswapAssets[0] = WETH;
         uniswapAssets[1] = USDC;
 
+        bytes[] memory uniPools = new bytes[](2);
+        uniPools[0] = abi.encode(WBTC, WETH, 500);
+        uniPools[1] = abi.encode(WETH, USDC, 500);
+
         vm.recordLogs();
 
         try tremor.dominoeFlashLoans(
-            assets, amounts, balancerAssets, uniswapAssets, address(pair1Flash), address(pair2Flash)
+            assets, amounts, balancerAssets, uniPools, address(pair1Flash), address(pair2Flash)
         ) {
             console.log("Flash loan succeeded");
         } catch (bytes memory err) {

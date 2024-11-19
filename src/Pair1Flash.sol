@@ -24,7 +24,13 @@ interface IPair2Flash {
         uint256 amount1;
     }
 
-    function initFlash(FlashParams memory params, address _pairFlash, address _tremor) external;
+    function initFlash(
+        FlashParams memory params,
+        address _pairFlash,
+        address _tremor,
+        bytes calldata nextPool_,
+        bytes calldata prevPool_
+    ) external;
 }
 
 contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
@@ -69,9 +75,17 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         PoolAddress.PoolKey poolKey;
     }
 
-    function initFlash(FlashParams calldata params_, address tremor_) external {
+    function initFlash(
+        FlashParams calldata params_,
+        address tremor_,
+        bytes calldata nextPool_,
+        bytes calldata prevPool_
+    ) external {
         assembly {
             tstore(0, tremor_)
+            tstore(0x20, calldataload(nextPool_.offset)) // tokenA
+            tstore(0x40, calldataload(add(nextPool_.offset, 0x20))) // tokenB
+            tstore(0x60, calldataload(add(nextPool_.offset, 0x40))) // feeAB
         }
         PoolAddress.PoolKey memory poolKey =
             PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
@@ -122,26 +136,34 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         TransferHelper.safeTransfer(token0, address(_pair2Flash), IERC20(token0).balanceOf(address(this)));
         TransferHelper.safeTransfer(token1, address(_pair2Flash), IERC20(token1).balanceOf(address(this)));
 
-        IUniswapV3Pool uniPool = IUniswapV3Pool(
-            PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: WETH9, token1: _USDC, fee: 500}))
-        );
-
         address tremor;
+        address tokenA;
+        address tokenB;
+        uint16 feeAB;
         assembly {
             tremor := tload(0)
+            tokenA := tload(0x20)
+            tokenB := tload(0x40)
+            feeAB := tload(0x60)
         }
+
+        IUniswapV3Pool uniPool = IUniswapV3Pool(
+            PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB}))
+        );
         _pair2Flash.initFlash(
             IPair2Flash.FlashParams({
-                token0: WETH9,
-                token1: _USDC,
-                fee1: 500,
-                amount0: IERC20(WETH9).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
-                amount1: IERC20(_USDC).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
+                token0: tokenA,
+                token1: tokenB,
+                fee1: feeAB,
+                amount0: IERC20(tokenA).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
+                amount1: IERC20(tokenB).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
                 fee2: 3000,
                 fee3: 10000
             }),
             address(this),
-            tremor
+            tremor,
+            bytes(""),
+            abi.encode(token0, token1, 0 /* fee1 isn't required atm */ )
         );
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);

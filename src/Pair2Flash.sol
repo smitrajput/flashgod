@@ -54,31 +54,40 @@ contract Pair2Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         PoolAddress.PoolKey poolKey;
     }
 
-    function initFlash(FlashParams calldata params_, address pairFlash_, address tremor_) external {
-        uint256 wethBalance = IERC20(WETH9).balanceOf(address(this));
-        assembly {
-            tstore(0x00, tremor_)
-            tstore(0x20, pairFlash_)
-            tstore(0x40, wethBalance)
+    function initFlash(
+        FlashParams calldata params_,
+        address pairFlash_,
+        address tremor_,
+        bytes calldata nextPool_,
+        bytes calldata prevPool_
+    ) external {
+        // Move struct creation outside of function call to reduce stack depth
+        FlashCallbackData memory flashData = FlashCallbackData({
+            amount0: params_.amount0,
+            amount1: params_.amount1,
+            payer: msg.sender,
+            poolKey: PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1}),
+            poolFee2: params_.fee2,
+            poolFee3: params_.fee3
+        });
+
+        {
+            (address prevTokenA, address prevTokenB,) = abi.decode(prevPool_, (address, address, uint16));
+            uint256 prevTokenABalance = IERC20(prevTokenA).balanceOf(address(this));
+            uint256 prevTokenBBalance = IERC20(prevTokenB).balanceOf(address(this));
+            assembly {
+                tstore(0x00, tremor_)
+                tstore(0x20, pairFlash_)
+                tstore(0x40, prevTokenABalance)
+                tstore(0x60, prevTokenBBalance)
+                tstore(0x80, calldataload(prevPool_.offset)) // prev tokenA
+                tstore(0xA0, calldataload(add(prevPool_.offset, 0x20))) // prev tokenB
+            }
         }
-        PoolAddress.PoolKey memory poolKey =
-            PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
-        IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(factory, poolKey));
-        uniPool.flash(
-            address(this),
-            params_.amount0,
-            params_.amount1,
-            abi.encode(
-                FlashCallbackData({
-                    amount0: params_.amount0,
-                    amount1: params_.amount1,
-                    payer: msg.sender,
-                    poolKey: poolKey,
-                    poolFee2: params_.fee2,
-                    poolFee3: params_.fee3
-                })
-            )
-        );
+        {
+            IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(factory, flashData.poolKey));
+            uniPool.flash(address(this), params_.amount0, params_.amount1, abi.encode(flashData));
+        }
     }
 
     function uniswapV3FlashCallback(uint256 fee0_, uint256 fee1_, bytes calldata data_) external override {
@@ -106,22 +115,30 @@ contract Pair2Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
 
         address tremor;
         address pairFlash;
-        uint256 wethBalance;
+        address prevTokenA;
+        address prevTokenB;
+        uint256 prevTokenABalance;
+        uint256 prevTokenBBalance;
         assembly {
             tremor := tload(0x00)
             pairFlash := tload(0x20)
-            wethBalance := tload(0x40)
+            prevTokenABalance := tload(0x40)
+            prevTokenBBalance := tload(0x60)
+            prevTokenA := tload(0x80)
+            prevTokenB := tload(0xA0)
         }
 
-        TransferHelper.safeTransfer(token0, tremor, IERC20(token0).balanceOf(address(this)));
-        TransferHelper.safeTransfer(token1, tremor, IERC20(token1).balanceOf(address(this)));
-        TransferHelper.safeTransfer(_WBTC, tremor, IERC20(_WBTC).balanceOf(address(this)));
+        // send all tokens to tremor
+        TransferHelper.safeTransfer(token0, tremor, decoded.amount0);
+        TransferHelper.safeTransfer(token1, tremor, decoded.amount1);
+        TransferHelper.safeTransfer(prevTokenA, tremor, prevTokenABalance);
+        TransferHelper.safeTransfer(prevTokenB, tremor, prevTokenBBalance);
 
         ITremor(tremor).fire();
 
         // return tokens to pairFlash
-        TransferHelper.safeTransfer(_WBTC, pairFlash, IERC20(_WBTC).balanceOf(address(this)));
-        TransferHelper.safeTransfer(WETH9, pairFlash, wethBalance);
+        TransferHelper.safeTransfer(prevTokenA, pairFlash, prevTokenABalance);
+        TransferHelper.safeTransfer(prevTokenB, pairFlash, prevTokenBBalance);
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
