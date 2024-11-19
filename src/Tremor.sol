@@ -25,8 +25,7 @@ interface IPair1Flash {
         uint256 amount1;
     }
 
-    function initFlash(FlashParams memory params, address _tremor, bytes calldata nextPool_, bytes calldata prevPool_)
-        external;
+    function initFlash(FlashParams memory params, address _tremor, bytes calldata nextPool_) external;
 }
 
 contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
@@ -41,6 +40,16 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
     address internal constant _USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address internal constant _FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
+    UniFlashLoanBalances[] internal _uniFlashLoanBalances;
+
+    struct UniFlashLoanBalances {
+        address pairFlash;
+        address token0;
+        address token1;
+        uint256 amount0;
+        uint256 amount1;
+    }
+
     constructor(address addressesProvider_, address pool_) {
         _addressesProvider = addressesProvider_;
         _pool = pool_;
@@ -54,10 +63,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         // could possibly eliminate _pool state variable using this
         return IPool(_pool);
         // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
-    }
-
-    function makeFlashLoan(IERC20[] memory tokens_, uint256[] memory amounts_, bytes memory userData_) external {
-        _vault.flashLoan(this, tokens_, amounts_, userData_);
     }
 
     /// @dev balancer flash-loan callback
@@ -85,14 +90,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         }
 
         address pair1Flash;
-        uint256 preUniFlashWbtcBalance = IERC20(_WBTC).balanceOf(address(this));
-        uint256 preUniFlashUsdcBalance = IERC20(_USDC).balanceOf(address(this));
-        uint256 preUniFlashWethBalance = IERC20(_WETH).balanceOf(address(this));
         assembly {
             pair1Flash := tload(0x00)
-            tstore(0x40, preUniFlashWbtcBalance)
-            tstore(0x60, preUniFlashUsdcBalance)
-            tstore(0x80, preUniFlashWethBalance)
         }
         {
             bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
@@ -114,8 +113,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
                     fee3: 10000
                 }),
                 address(this),
-                uniPools[1],
-                bytes("")
+                uniPools[1]
             );
         }
 
@@ -201,9 +199,25 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
         return true;
     }
 
-    function tabulate() external {
+    /// @dev add onlyPairFlash permission
+    function registerUniFlashLoanBalances(
+        address pairFlash_,
+        address token0_,
+        address token1_,
+        uint256 amount0_,
+        uint256 amount1_
+    ) external {
         // use this fn to note down balances of tokens sent from each PairFlash (pool), to be able to return them correctly
         // and more importantly for generalised tokens / univ3 pools
+        _uniFlashLoanBalances.push(
+            UniFlashLoanBalances({
+                pairFlash: pairFlash_,
+                token0: token0_,
+                token1: token1_,
+                amount0: amount0_,
+                amount1: amount1_
+            })
+        );
     }
 
     function fire() external {
@@ -217,20 +231,13 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, Test {
 
         // do interesting stuff here with ~$1B of flashloaned money
 
-        // Return the difference between current balances and initial balances back to PairFlash2
-        address pair2Flash;
-        uint256 preUniFlashWbtcBalance;
-        uint256 preUniFlashUsdcBalance;
-        uint256 preUniFlashWethBalance;
-        assembly {
-            pair2Flash := tload(0x20)
-            preUniFlashWbtcBalance := tload(0x40)
-            preUniFlashUsdcBalance := tload(0x60)
-            preUniFlashWethBalance := tload(0x80)
+        for (uint256 i = 0; i < _uniFlashLoanBalances.length; ++i) {
+            TransferHelper.safeTransfer(
+                _uniFlashLoanBalances[i].token0, _uniFlashLoanBalances[i].pairFlash, _uniFlashLoanBalances[i].amount0
+            );
+            TransferHelper.safeTransfer(
+                _uniFlashLoanBalances[i].token1, _uniFlashLoanBalances[i].pairFlash, _uniFlashLoanBalances[i].amount1
+            );
         }
-
-        TransferHelper.safeTransfer(_USDC, pair2Flash, IERC20(_USDC).balanceOf(address(this)) - preUniFlashUsdcBalance);
-        TransferHelper.safeTransfer(_WBTC, pair2Flash, IERC20(_WBTC).balanceOf(address(this)) - preUniFlashWbtcBalance);
-        TransferHelper.safeTransfer(_WETH, pair2Flash, IERC20(_WETH).balanceOf(address(this)) - preUniFlashWethBalance);
     }
 }

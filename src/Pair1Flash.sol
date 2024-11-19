@@ -24,13 +24,20 @@ interface IPair2Flash {
         uint256 amount1;
     }
 
-    function initFlash(
-        FlashParams memory params,
-        address _pairFlash,
-        address _tremor,
-        bytes calldata nextPool_,
-        bytes calldata prevPool_
+    function initFlash(FlashParams memory params_, address pairFlash_, address tremor_, bytes calldata nextPool_)
+        external;
+}
+
+interface ITremor {
+    function registerUniFlashLoanBalances(
+        address pairFlash_,
+        address token0_,
+        address token1_,
+        uint256 amount0_,
+        uint256 amount1_
     ) external;
+
+    function fire() external;
 }
 
 contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
@@ -75,12 +82,7 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         PoolAddress.PoolKey poolKey;
     }
 
-    function initFlash(
-        FlashParams calldata params_,
-        address tremor_,
-        bytes calldata nextPool_,
-        bytes calldata prevPool_
-    ) external {
+    function initFlash(FlashParams calldata params_, address tremor_, bytes calldata nextPool_) external {
         assembly {
             tstore(0, tremor_)
             tstore(0x20, calldataload(nextPool_.offset)) // tokenA
@@ -133,9 +135,6 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         deal(token0, address(this), IERC20(token0).balanceOf(address(this)) + fee0_);
         deal(token1, address(this), IERC20(token1).balanceOf(address(this)) + fee1_);
 
-        TransferHelper.safeTransfer(token0, address(_pair2Flash), IERC20(token0).balanceOf(address(this)));
-        TransferHelper.safeTransfer(token1, address(_pair2Flash), IERC20(token1).balanceOf(address(this)));
-
         address tremor;
         address tokenA;
         address tokenB;
@@ -146,6 +145,10 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
             tokenB := tload(0x40)
             feeAB := tload(0x60)
         }
+
+        TransferHelper.safeTransfer(token0, tremor, decoded.amount0);
+        TransferHelper.safeTransfer(token1, tremor, decoded.amount1);
+        ITremor(tremor).registerUniFlashLoanBalances(address(this), token0, token1, decoded.amount0, decoded.amount1);
 
         IUniswapV3Pool uniPool = IUniswapV3Pool(
             PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB}))
@@ -162,8 +165,7 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
             }),
             address(this),
             tremor,
-            bytes(""),
-            abi.encode(token0, token1, 0 /* fee1 isn't required atm */ )
+            bytes("")
         );
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);

@@ -15,6 +15,14 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Test, console} from "forge-std/Test.sol";
 
 interface ITremor {
+    function registerUniFlashLoanBalances(
+        address pairFlash_,
+        address token0_,
+        address token1_,
+        uint256 amount0_,
+        uint256 amount1_
+    ) external;
+
     function fire() external;
 }
 
@@ -54,13 +62,9 @@ contract Pair2Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         PoolAddress.PoolKey poolKey;
     }
 
-    function initFlash(
-        FlashParams calldata params_,
-        address pairFlash_,
-        address tremor_,
-        bytes calldata nextPool_,
-        bytes calldata prevPool_
-    ) external {
+    function initFlash(FlashParams calldata params_, address pairFlash_, address tremor_, bytes calldata nextPool_)
+        external
+    {
         // Move struct creation outside of function call to reduce stack depth
         FlashCallbackData memory flashData = FlashCallbackData({
             amount0: params_.amount0,
@@ -72,16 +76,16 @@ contract Pair2Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         });
 
         {
-            (address prevTokenA, address prevTokenB,) = abi.decode(prevPool_, (address, address, uint16));
-            uint256 prevTokenABalance = IERC20(prevTokenA).balanceOf(address(this));
-            uint256 prevTokenBBalance = IERC20(prevTokenB).balanceOf(address(this));
+            // (address prevTokenA, address prevTokenB,) = abi.decode(prevPool_, (address, address, uint16));
+            // uint256 prevTokenABalance = IERC20(prevTokenA).balanceOf(address(this));
+            // uint256 prevTokenBBalance = IERC20(prevTokenB).balanceOf(address(this));
             assembly {
                 tstore(0x00, tremor_)
                 tstore(0x20, pairFlash_)
-                tstore(0x40, prevTokenABalance)
-                tstore(0x60, prevTokenBBalance)
-                tstore(0x80, calldataload(prevPool_.offset)) // prev tokenA
-                tstore(0xA0, calldataload(add(prevPool_.offset, 0x20))) // prev tokenB
+                // tstore(0x40, prevTokenABalance)
+                // tstore(0x60, prevTokenBBalance)
+                // tstore(0x80, calldataload(prevPool_.offset)) // prev tokenA
+                // tstore(0xA0, calldataload(add(prevPool_.offset, 0x20))) // prev tokenB
             }
         }
         {
@@ -115,30 +119,16 @@ contract Pair2Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
 
         address tremor;
         address pairFlash;
-        address prevTokenA;
-        address prevTokenB;
-        uint256 prevTokenABalance;
-        uint256 prevTokenBBalance;
         assembly {
             tremor := tload(0x00)
-            pairFlash := tload(0x20)
-            prevTokenABalance := tload(0x40)
-            prevTokenBBalance := tload(0x60)
-            prevTokenA := tload(0x80)
-            prevTokenB := tload(0xA0)
         }
 
-        // send all tokens to tremor
+        // send tokens to tremor
         TransferHelper.safeTransfer(token0, tremor, decoded.amount0);
         TransferHelper.safeTransfer(token1, tremor, decoded.amount1);
-        TransferHelper.safeTransfer(prevTokenA, tremor, prevTokenABalance);
-        TransferHelper.safeTransfer(prevTokenB, tremor, prevTokenBBalance);
+        ITremor(tremor).registerUniFlashLoanBalances(address(this), token0, token1, decoded.amount0, decoded.amount1);
 
         ITremor(tremor).fire();
-
-        // return tokens to pairFlash
-        TransferHelper.safeTransfer(prevTokenA, pairFlash, prevTokenABalance);
-        TransferHelper.safeTransfer(prevTokenB, pairFlash, prevTokenBBalance);
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
