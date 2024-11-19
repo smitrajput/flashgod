@@ -2,6 +2,10 @@
 
 Ultra-light-weight flash-loan aggregator on all EVM compatible chains, starting with Arbitrum.
 
+Featuring
+- Aave V3
+- Uniswap V3
+- Balancer V2
 
 
 ## Foundry
