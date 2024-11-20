@@ -20,18 +20,17 @@ import "@uniswap/v3-periphery/contracts/libraries/CallbackValidation.sol";
 import {IVault} from "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
 import {IFlashLoanRecipient} from "@balancer-labs/v2-interfaces/contracts/vault/IFlashLoanRecipient.sol";
 import {IERC20 as IERC20_BAL} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
-import {Test, console, Vm} from "forge-std/Test.sol";
+import {console} from "forge-std/Test.sol";
 
-contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallback, PeripheryPayments, Test {
+contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallback, PeripheryPayments {
     address internal _addressesProvider;
-    address internal _pool;
+    IPool internal _aavePool;
     address internal _uniV3Factory;
-    IVault internal _vault;
-    ISwapRouter internal _swapRouter;
-    // only for logging assistance in _fire()
-    address[] internal _assets;
-    UniFlashLoanBalances[] internal _uniFlashLoanBalances;
+    IVault internal _balancerVault;
+    ISwapRouter internal _uniswapRouter;
     bytes[] internal _uniPools;
+    // only for logging assistance in _letsPutASmileOnThatFace()
+    address[] internal _assets;
 
     struct UniFlashLoanBalances {
         address pairFlash;
@@ -63,17 +62,17 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
     constructor(
         address addressesProvider_,
-        address pool_,
+        address aavePool_,
         address uniV3Factory_,
         address swapRouter_,
         address balVault_,
         address WETH_
     ) PeripheryImmutableState(uniV3Factory_, WETH_) {
         _addressesProvider = addressesProvider_;
-        _pool = pool_;
+        _aavePool = IPool(aavePool_);
         _uniV3Factory = uniV3Factory_;
-        _swapRouter = ISwapRouter(swapRouter_);
-        _vault = IVault(balVault_);
+        _uniswapRouter = ISwapRouter(swapRouter_);
+        _balancerVault = IVault(balVault_);
     }
 
     function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
@@ -81,9 +80,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     }
 
     function POOL() external view override returns (IPool) {
-        // could possibly eliminate _pool state variable using this
-        return IPool(_pool);
-        // return ADDRESSES_PROVIDER().getPool(/*id of pool on arbitrum*/);
+        return _aavePool;
     }
 
     function dominoeFlashLoans(
@@ -94,14 +91,13 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     ) external {
         _assets = aaveAssets_;
 
-        console.log("Approving tokens...");
         for (uint256 i = 0; i < aaveAssets_.length; ++i) {
-            IERC20(aaveAssets_[i]).approve(_pool, type(uint256).max);
+            IERC20(aaveAssets_[i]).approve(address(_aavePool), type(uint256).max);
         }
 
         uint256[] memory interestRateModes = new uint256[](aaveAssets_.length);
         console.log("Calling AAVE flash loan...");
-        IPool(_pool).flashLoan(
+        _aavePool.flashLoan(
             address(this),
             aaveAssets_,
             aaveAmounts_,
@@ -134,10 +130,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         // TODO: fix IERC20_BAL quirk
         IERC20_BAL[] memory balTokens = new IERC20_BAL[](balancerAssets.length);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
-            balancerAmounts[i] = IERC20(balancerAssets[i]).balanceOf(address(_vault));
+            balancerAmounts[i] = IERC20(balancerAssets[i]).balanceOf(address(_balancerVault));
             balTokens[i] = IERC20_BAL(balancerAssets[i]);
         }
-        _vault.flashLoan(this, balTokens, balancerAmounts, abi.encode(uniPools));
+        _balancerVault.flashLoan(this, balTokens, balancerAmounts, abi.encode(uniPools));
         return true;
     }
 
@@ -148,7 +144,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256[] memory feeAmounts_,
         bytes memory userData_
     ) external override {
-        require(msg.sender == address(_vault));
+        require(msg.sender == address(_balancerVault));
 
         console.log("Balancer flashloan received -----------------");
         for (uint256 i = 0; i < tokens_.length; i++) {
@@ -156,10 +152,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                 IERC20Metadata(address(tokens_[i])).symbol(),
                 amounts_[i] / (10 ** IERC20Metadata(address(tokens_[i])).decimals())
             );
-        }
-        for (uint256 i = 0; i < tokens_.length; i++) {
-            uint256 currentBalance = tokens_[i].balanceOf(address(this));
-            deal(address(tokens_[i]), address(this), currentBalance + feeAmounts_[i]);
         }
 
         // initiate uniV3 flash loans
@@ -191,7 +183,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         // return loan to balancer vault
         for (uint256 i = 0; i < tokens_.length; i++) {
-            TransferHelper.safeTransfer(address(tokens_[i]), address(_vault), amounts_[i] + feeAmounts_[i]);
+            TransferHelper.safeTransfer(address(tokens_[i]), address(_balancerVault), amounts_[i] + feeAmounts_[i]);
         }
     }
 
@@ -234,15 +226,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         CallbackValidation.verifyCallback(_uniV3Factory, decoded.poolKey);
 
-        TransferHelper.safeApprove(token0, address(_swapRouter), decoded.amount0);
-        TransferHelper.safeApprove(token1, address(_swapRouter), decoded.amount1);
+        TransferHelper.safeApprove(token0, address(_uniswapRouter), decoded.amount0);
+        TransferHelper.safeApprove(token1, address(_uniswapRouter), decoded.amount1);
 
         uint256 amount0Owed = LowGasSafeMath.add(decoded.amount0, fee0_);
         uint256 amount1Owed = LowGasSafeMath.add(decoded.amount1, fee1_);
-
-        // simulate minting fees to existing balance
-        deal(token0, address(this), IERC20(token0).balanceOf(address(this)) + fee0_);
-        deal(token1, address(this), IERC20(token1).balanceOf(address(this)) + fee1_);
 
         address tokenA;
         address tokenB;
@@ -280,15 +268,15 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             );
         } else {
             // NOTE: let the games begin
-            _fire();
+            _letsPutASmileOnThatFace();
         }
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
     }
 
-    function _fire() internal {
-        console.log("AMMUNITION LOADED -----------------");
+    function _letsPutASmileOnThatFace() internal {
+        console.log("Let's put a smile on that face -----------------");
         for (uint256 i = 0; i < _assets.length; ++i) {
             console.log(
                 IERC20Metadata(_assets[i]).symbol(),
@@ -296,6 +284,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             );
         }
 
-        // do interesting stuff here with ~$1B of flashloaned money
+        // do interesting stuff here with ~$1.5B of flashloaned money
     }
 }
