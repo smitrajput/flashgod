@@ -23,30 +23,27 @@ contract TremorTest is Test {
 
     address public constant VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
-    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    // Arbitrum
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    address public constant RDNT = 0x3082CC23568eA640225c2467653dB90e9250AaA0;
     address public constant WE_ETH = 0x35751007a407ca6FEFfE80b3cB397736D2cf4dbe;
-    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address public constant WSTETH = 0x5979D7b546E38E414F7E9822514be443A4800529;
-    address public constant USDT = 0xfD086BC7cD4c4ca33BD5C38ec837347e8A75A05d;
+    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant ARB = 0x912CE59144191C1204E64559FE8253a0e49E6548;
-    address public constant LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
+    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address public constant RETH = 0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8;
+    address public constant LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
+    address public constant USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
+    address public constant GMX = 0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a;
+    address public constant UNI_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    address public constant BAL_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address public constant SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
     function setUp() public {
         uint256 forkId = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
         vm.selectFork(forkId);
 
-        swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-        pair2Flash = new Pair2Flash(
-            swapRouter, 0x1F98431c8aD98523631AE4a59f267346ea31F984, 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
-        );
-        pair1Flash = new Pair1Flash(
-            swapRouter,
-            0x1F98431c8aD98523631AE4a59f267346ea31F984,
-            0x82aF49447D8a07e3bd95BD0d56f35241523fBab1,
-            payable(address(pair2Flash))
-        );
+        swapRouter = ISwapRouter(SWAP_ROUTER);
 
         // Get the deployed pool address from the deployer
         // pool = IPool(deployer.getPool());
@@ -54,37 +51,27 @@ contract TremorTest is Test {
 
         // Deploy Tremor
         // tremor = new Tremor(address(deployer.getAddressesProvider()), address(pool));
-        tremor = new Tremor(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool));
+        tremor = new Tremor(
+            0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb, address(pool), UNI_V3_FACTORY, SWAP_ROUTER, BAL_VAULT, WETH
+        );
 
         // Set up labels for better trace outputs
         vm.label(address(pool), "AAVE_POOL");
     }
-
-    // function test_makeFlashLoan() public {
-    //     IERC20[] memory assets = new IERC20[](3);
-    //     assets[0] = IERC20(WBTC);
-    //     assets[1] = IERC20(WETH);
-    //     assets[2] = IERC20(USDC);
-    //     uint256[] memory amounts = new uint256[](3);
-    //     amounts[0] = IERC20(WBTC).balanceOf(VAULT); //  - 10 ** IERC20Metadata(WBTC).decimals()
-    //     amounts[1] = IERC20(WETH).balanceOf(VAULT);
-    //     amounts[2] = IERC20(USDC).balanceOf(VAULT);
-    //     tremor.makeFlashLoan(assets, amounts, bytes(""));
-    // }
 
     function test_dominoeFlashLoans() public {
         console.log("FLASHLOAN_PREMIUM_TO_PROTOCOL:", pool.FLASHLOAN_PREMIUM_TO_PROTOCOL());
         console.log("FLASHLOAN_PREMIUM_TOTAL:", pool.FLASHLOAN_PREMIUM_TOTAL());
 
         address[] memory assets = new address[](8);
-        assets[0] = WETH; // WETH on Arbitrum
-        assets[1] = WBTC; // WBTC on Arbitrum
-        assets[2] = USDC; // weETH on Arbitrum
-        assets[3] = WE_ETH; // USDC on Arbitrum
-        assets[4] = WSTETH; // USDT on Arbitrum
-        assets[5] = ARB; // DAI on Arbitrum
-        assets[6] = LINK; // LINK on Arbitrum
-        assets[7] = RETH; // rETH on Arbitrum
+        assets[0] = WETH;
+        assets[1] = WBTC;
+        assets[2] = USDC;
+        assets[3] = WE_ETH;
+        assets[4] = WSTETH;
+        assets[5] = ARB;
+        assets[6] = LINK;
+        assets[7] = RETH;
         uint256[] memory amounts = new uint256[](8);
 
         uint256 maxFlashloanable;
@@ -104,24 +91,21 @@ contract TremorTest is Test {
             deal(assets[i], address(tremor), fee);
         }
 
-        address[] memory balancerAssets = new address[](3);
+        address[] memory balancerAssets = new address[](4);
         balancerAssets[0] = WBTC;
-        balancerAssets[1] = WETH;
-        balancerAssets[2] = USDC;
+        balancerAssets[1] = RDNT;
+        balancerAssets[2] = WETH;
+        balancerAssets[3] = USDC;
 
-        address[] memory uniswapAssets = new address[](2);
-        uniswapAssets[0] = WETH;
-        uniswapAssets[1] = USDC;
-
-        bytes[] memory uniPools = new bytes[](2);
+        bytes[] memory uniPools = new bytes[](4);
         uniPools[0] = abi.encode(WBTC, WETH, 500);
         uniPools[1] = abi.encode(WETH, USDC, 500);
+        uniPools[2] = abi.encode(WETH, GMX, 10000);
+        uniPools[3] = abi.encode(WBTC, USDT, 500);
 
         vm.recordLogs();
 
-        try tremor.dominoeFlashLoans(
-            assets, amounts, balancerAssets, uniPools, address(pair1Flash), address(pair2Flash)
-        ) {
+        try tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools) {
             console.log("Flash loan succeeded");
         } catch (bytes memory err) {
             console.log("Flash loan failed");

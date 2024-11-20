@@ -92,11 +92,13 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
             tstore(0, tremor_)
         }
 
+        bytes calldata nextPool = uniPools_[nextPoolIndex_];
+
         if (nextPoolIndex_ < uniPools_.length) {
             assembly {
-                tstore(0x20, calldataload(uniPools_[nextPoolIndex_].offset)) // tokenA
-                tstore(0x40, calldataload(add(uniPools_[nextPoolIndex_].offset, 0x20))) // tokenB
-                tstore(0x60, calldataload(add(uniPools_[nextPoolIndex_].offset, 0x40))) // feeAB
+                tstore(0x20, calldataload(nextPool.offset)) // tokenA
+                tstore(0x40, calldataload(add(nextPool.offset, 0x20))) // tokenB
+                tstore(0x60, calldataload(add(nextPool.offset, 0x40))) // feeAB
             }
         } else {
             return;
@@ -139,7 +141,6 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         TransferHelper.safeApprove(token0, address(_swapRouter), decoded.amount0);
         TransferHelper.safeApprove(token1, address(_swapRouter), decoded.amount1);
 
-        // end up with amountOut0 of token0 from first swap and amountOut1 of token1 from second swap
         uint256 amount0Owed = LowGasSafeMath.add(decoded.amount0, fee0_);
         uint256 amount1Owed = LowGasSafeMath.add(decoded.amount1, fee1_);
 
@@ -166,9 +167,8 @@ contract Pair1Flash is IUniswapV3FlashCallback, PeripheryPayments, Test {
         }
         if (tokenA != address(0) && tokenB != address(0)) {
             /* create Clone of this contract using Solady: https://github.com/Vectorized/solady/blob/main/src/utils/LibClone.sol*/
-            // _nextPair1Flash = address(new Pair1Flash(_swapRouter, _FACTORY, _WETH));            
+            // _nextPair1Flash = address(new Pair1Flash(_swapRouter, _FACTORY, _WETH));
 
-            
             IUniswapV3Pool uniPool = IUniswapV3Pool(
                 PoolAddress.computeAddress(_factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB}))
             );
