@@ -276,7 +276,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     }
 
     function _letsPutASmileOnThatFace() internal {
-        console.log("Let's put a smile on that face -----------------");
+        console.log("let's put a smile on that face -----------------");
         for (uint256 i = 0; i < _assets.length; ++i) {
             console.log(
                 IERC20Metadata(_assets[i]).symbol(),

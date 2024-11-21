@@ -50,6 +50,7 @@ library Addresses {
         address RETH;
         address LINK;
         address USDT;
+        address OP;
     }
 
     struct PolygonAddresses {
@@ -60,6 +61,10 @@ library Addresses {
         address WSTETH;
         address LINK;
         address USDT;
+        address WMATIC;
+        address MATICX;
+        address TEL;
+        address USDCe;
     }
 
     struct BaseAddresses {
@@ -67,9 +72,12 @@ library Addresses {
         address WETH;
         address USDC;
         address WSTETH;
+        address CB_BTC;
+        address WE_ETH;
+        address CB_ETH;
+        address DEGEN;
+        address RDNT;
         address RETH;
-        address LINK;
-        address USDT;
     }
 
     struct ZkSyncAddresses {
@@ -162,13 +170,14 @@ library Addresses {
 
         return OptimismAddresses({
             provider: provider,
-            WETH: 0x4200000000000000000000000000000000000006,
-            USDC: 0x7F5c764cBc14f9669B88837ca1490cCa17c31607,
-            WBTC: 0x68f180fcCe6836688e9084f035309E29Bf0A2095,
+            USDC: 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85,
             WSTETH: 0x1F32b1c2345538c0c6f582fCB022739c4A194Ebb,
-            RETH: 0x9Bcef72be871e61ED4fBbc7630889beE758eb81D,
             LINK: 0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6,
-            USDT: 0x94b008aA00579c1307B0EF2c499aD98a8ce58e58
+            WETH: 0x4200000000000000000000000000000000000006,
+            OP: 0x4200000000000000000000000000000000000042,
+            WBTC: 0x68f180fcCe6836688e9084f035309E29Bf0A2095,
+            USDT: 0x94b008aA00579c1307B0EF2c499aD98a8ce58e58,
+            RETH: 0x9Bcef72be871e61ED4fBbc7630889beE758eb81D
         });
     }
 
@@ -186,12 +195,16 @@ library Addresses {
 
         return PolygonAddresses({
             provider: provider,
-            WETH: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619,
-            USDC: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174,
-            WBTC: 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6,
             WSTETH: 0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD,
+            WMATIC: 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270,
+            WBTC: 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6,
+            USDCe: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174,
+            USDC: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359,
             LINK: 0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39,
-            USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F
+            WETH: 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619,
+            USDT: 0xc2132D05D31c914a87C6611C10748AEb04B58e8F,
+            TEL: 0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32,
+            MATICX: 0xfa68FB4628DFF1028CFEc22b4162FCcd0d45efb6
         });
     }
 
@@ -200,19 +213,22 @@ library Addresses {
         // Base: https://docs.base.org/base-contracts
         ProviderAddresses memory provider = ProviderAddresses({
             UNI_V3_FACTORY: 0x33128a8fC17869897dcE68Ed026d694621f6FDfD,
-            BAL_VAULT: address(0), // Not available
+            BAL_VAULT: 0xBA12222222228d8Ba445958a75a0704d566BF2C8,
             SWAP_ROUTER: 0x2626664c2603336E57B271c5C0b26F421741e481,
-            ADDRESSES_PROVIDER: address(0) // Not available
+            ADDRESSES_PROVIDER: 0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D
         });
 
         return BaseAddresses({
             provider: provider,
-            WETH: 0x4200000000000000000000000000000000000006,
-            USDC: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913,
-            WSTETH: 0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452,
-            RETH: 0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c,
-            LINK: 0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196,
-            USDT: 0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2
+            WETH: 0x4200000000000000000000000000000000000006, // 4.76e36 (smallest)
+            WE_ETH: 0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A, // 2.17e40
+            CB_ETH: 0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22, // 1.93e41
+            DEGEN: 0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed, // 3.57e41
+            USDC: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, // 5.94e41
+            RETH: 0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c, // 8.29e41
+            WSTETH: 0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452, // 8.77e41
+            CB_BTC: 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf, // 9.19e41
+            RDNT: 0xd722E55C1d9D9fA0021A5215Cbb904b92B3dC5d4 // 9.74e41 (largest)
         });
     }
 
