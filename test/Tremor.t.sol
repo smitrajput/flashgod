@@ -64,6 +64,7 @@ contract TremorTest is Test {
             console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
+        // NOTE: balancer wants its assets in ascending order of their address values
         address[] memory balancerAssets = new address[](4);
         balancerAssets[0] = addresses.WSTETH;
         balancerAssets[1] = addresses.AAVE;
@@ -306,6 +307,121 @@ contract TremorTest is Test {
         tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools);
     }
 
+    function test_dominoeFlashLoans_avalanche() public {
+        vm.createSelectFork(vm.envString("AVAX_RPC_URL"));
+
+        Addresses.AvalancheAddresses memory addresses = Addresses.avalancheAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH_e
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        address[] memory assets = new address[](7);
+        assets[0] = addresses.BTC_b;
+        assets[1] = addresses.WAVAX;
+        assets[2] = addresses.USDC;
+        assets[3] = addresses.sAVAX;
+        assets[4] = addresses.USDT;
+        assets[5] = addresses.WETH_e;
+        assets[6] = addresses.LINK_e;
+
+        uint256[] memory amounts = new uint256[](7);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < assets.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            if (assets[i] == addresses.USDC || assets[i] == addresses.USDT) {
+                amounts[i] = (maxFlashloanable * 95) / 100; // could test with more
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        // NOTE: balancer likes its assets ascending ordered
+        address[] memory balancerAssets = new address[](4);
+        balancerAssets[0] = addresses.sAVAX;
+        balancerAssets[1] = addresses.ggAVAX;
+        balancerAssets[2] = addresses.WAVAX;
+        balancerAssets[3] = addresses.USDC;
+
+        // balancer charges 0 flash-loan fees <3
+
+        // NOTE: uniV3 likes its pool tokens in certain order
+        bytes[] memory uniPools = new bytes[](3);
+        uniPools[0] = abi.encode(addresses.WETH_e, addresses.WAVAX, 500);
+        uniPools[1] = abi.encode(addresses.WAVAX, addresses.USDC, 500);
+        uniPools[2] = abi.encode(addresses.BTC_b, addresses.USDC, 3000);
+
+        simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
+
+        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools);
+    }
+
+    function test_dominoeFlashLoans_bsc() public {
+        vm.createSelectFork(vm.envString("BSC_RPC_URL"));
+
+        Addresses.BscAddresses memory addresses = Addresses.bscAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.ETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        address[] memory assets = new address[](7);
+        assets[0] = addresses.BTCB;
+        assets[1] = addresses.WBNB;
+        assets[2] = addresses.USDC;
+        assets[3] = addresses.ETH;
+        assets[4] = addresses.USDT;
+        assets[5] = addresses.WSTETH;
+        assets[6] = addresses.FDUSD;
+
+        uint256[] memory amounts = new uint256[](7);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < assets.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            // NOTE: occasional changes in max-flashloanable amounts observed for some stables
+            if (assets[i] == addresses.USDC || assets[i] == addresses.FDUSD) {
+                amounts[i] = (maxFlashloanable * 95) / 100; // could test with more
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        // NOTE: balancer likes its assets ascending ordered
+        address[] memory balancerAssets = new address[](0);
+
+        // balancer charges 0 flash-loan fees <3
+
+        // NOTE: uniV3 likes its pool tokens in certain order
+        bytes[] memory uniPools = new bytes[](3);
+        uniPools[0] = abi.encode(addresses.ETH, addresses.WBNB, 500);
+        uniPools[1] = abi.encode(addresses.USDT, addresses.USDC, 100);
+        uniPools[2] = abi.encode(addresses.ETH, addresses.USDT, 500);
+
+        simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
+
+        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools);
+    }
+
     function simulateAaveAndUniswapFlashLoanFees(
         address[] memory assets,
         uint256[] memory amounts,
@@ -315,7 +431,7 @@ contract TremorTest is Test {
     ) internal {
         // simulating aave flash-loan fees, which should come from flash-loan profits
         for (uint256 i = 0; i < assets.length; i++) {
-            // TODO: fix. 0.055% coz 0.05% fails
+            // NOTE: aavePremium is 500, 550 and 1000 for different chains, depending on tests passing (aave allowing it)
             // uint256 fee = (amounts[i] * aavePremium) / 1000000;
             deal(assets[i], address(tremor), (amounts[i] * aavePremium) / 1000000);
         }
@@ -453,6 +569,4 @@ contract TremorTest is Test {
         }
         return string(bUpper);
     }
-
-    event Debug(string message, bytes data);
 }

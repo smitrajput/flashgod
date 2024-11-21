@@ -11,7 +11,7 @@ library Addresses {
 
     struct EthereumAddresses {
         ProviderAddresses provider;
-        address WETH; // Native wrapped token
+        address WETH;
         address USDC;
         address WBTC;
         address WE_ETH;
@@ -80,22 +80,27 @@ library Addresses {
         address RETH;
     }
 
-    struct ZkSyncAddresses {
+    struct AvalancheAddresses {
         ProviderAddresses provider;
-        address WETH;
+        address BTC_b;
+        address WAVAX;
         address USDC;
-        address WBTC;
-        address WSTETH;
+        address sAVAX;
         address USDT;
+        address WETH_e;
+        address LINK_e;
+        address ggAVAX;
     }
 
-    struct FantomAddresses {
+    struct BscAddresses {
         ProviderAddresses provider;
-        address WETH;
+        address BTCB;
+        address WBNB;
         address USDC;
-        address WBTC;
-        address LINK;
         address USDT;
+        address ETH;
+        address FDUSD;
+        address WSTETH;
     }
 
     function ethereumAddresses() internal pure returns (EthereumAddresses memory) {
@@ -232,43 +237,46 @@ library Addresses {
         });
     }
 
-    function zkSyncAddresses() internal pure returns (ZkSyncAddresses memory) {
-        // Sources:
-        // zkSync Era Portal: https://era.zksync.io/docs/dev/building-on-zksync/useful-address.html
+    function avalancheAddresses() internal pure returns (AvalancheAddresses memory) {
         ProviderAddresses memory provider = ProviderAddresses({
-            UNI_V3_FACTORY: address(0), // Not available
-            BAL_VAULT: address(0), // Not available
-            SWAP_ROUTER: address(0), // Not available
-            ADDRESSES_PROVIDER: address(0) // Not available
+            UNI_V3_FACTORY: 0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD, // Uniswap v3 factory on Avalanche
+            BAL_VAULT: 0xBA12222222228d8Ba445958a75a0704d566BF2C8,
+            SWAP_ROUTER: 0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE, // Uniswap v3 router on Avalanche
+            ADDRESSES_PROVIDER: 0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb
         });
 
-        return ZkSyncAddresses({
+        return AvalancheAddresses({
             provider: provider,
-            WETH: 0x5AEa5775959fBC2557Cc8789bC1bf90A239D9a91,
-            USDC: 0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4,
-            WBTC: 0xBBeB516fb02a01611cBBE0453Fe3c580D7281011,
-            WSTETH: 0x703b52F2b28fEbcB60E1372858AF5b18849FE867,
-            USDT: 0x493257fD37EDB34451f62EDf8D2a0C418852bA4C
+            BTC_b: 0x152b9d0FdC40C096757F570A51E494bd4b943E50, // 9.66e43 (smallest)
+            sAVAX: 0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE, // 1.95e44
+            WETH_e: 0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB, // 3.33e44
+            LINK_e: 0x5947BB275c521040051D82396192181b413227A3, // 3.99e44
+            USDT: 0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7, // 6.80e44
+            ggAVAX: 0xA25EaF2906FA1a3a13EdAc9B9657108Af7B703e3, // 7.31e44
+            WAVAX: 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7, // 8.10e44
+            USDC: 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E // 8.39e44 (largest)
         });
     }
 
-    function fantomAddresses() internal pure returns (FantomAddresses memory) {
+    function bscAddresses() internal pure returns (BscAddresses memory) {
         // Sources:
-        // Fantom Foundation: https://docs.fantom.foundation/quick-start/built-on-fantom
+        // BSC: https://docs.bscscan.com/
         ProviderAddresses memory provider = ProviderAddresses({
-            UNI_V3_FACTORY: address(0), // Not available
-            BAL_VAULT: 0x20dd72Ed959b6147912C2e529F0a0C651c33c9ce,
-            SWAP_ROUTER: address(0), // Not available
-            ADDRESSES_PROVIDER: address(0) // Not available
+            UNI_V3_FACTORY: 0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7,
+            BAL_VAULT: 0xBA12222222228d8Ba445958a75a0704d566BF2C8,
+            SWAP_ROUTER: 0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2,
+            ADDRESSES_PROVIDER: 0xff75B6da14FfbbfD355Daf7a2731456b3562Ba6D
         });
 
-        return FantomAddresses({
+        return BscAddresses({
             provider: provider,
-            WETH: 0x74b23882a30290451A17c44f4F05243b6b58C76d,
-            USDC: 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75,
-            WBTC: 0x321162Cd933E2Be498Cd2267a90534A804051b11,
-            LINK: 0xb3654dc3D10Ea7645f8319668E8F54d2574FBdC8,
-            USDT: 0x049d68029688eAbF473097a2fC38ef61633A3C7A
+            ETH: 0x2170Ed0880ac9A755fd29B2688956BD959F933F8, // 1.51e44 (smallest)
+            WSTETH: 0x26c5e01524d2E6280A48F2c50fF6De7e52E9611C, // 1.78e44
+            USDT: 0x55d398326f99059fF775485246999027B3197955, // 3.86e44
+            BTCB: 0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c, // 5.09e44
+            USDC: 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d, // 6.29e44
+            WBNB: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c, // 8.46e44
+            FDUSD: 0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409 // 8.97e44 (largest)
         });
     }
 }
