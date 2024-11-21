@@ -1,18 +1,20 @@
 # flashgod
 
-Ultra-light-weight flash-loan aggregator on all EVM compatible chains.
+Ultra-light-weight flash-loan aggregator on all EVM compatible chains (with size).
 
 ### Sauce
-Unbridled access to __all__ flashloanable assets of __all__ flash-loan providers on __any__ given chain, *__in 1 transaction__*.
+Unbridled access to __all__ flashloanable assets of __all__ flash-loan providers on __any__ given chain, *__in 1 transaction__*
 
-Featuring providers:
+__featuring providers__
 - Aave V3
 - Uniswap V3
 - Balancer V2
 
-On chains:
+__on chains__
 - Ethereum
 - Arbitrum
 - Optimism
 - Polygon
 - Base
+- Avalanche
+- BSC

@@ -284,6 +284,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             );
         }
 
-        // do interesting stuff here with ~$1.5B of flashloaned money
+        // do interesting stuff here with your 1-block riches
     }
 }
