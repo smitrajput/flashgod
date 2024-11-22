@@ -15,10 +15,13 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Addresses} from "../src/config/Addresses.sol";
+import {EnumerableSetLib} from "@solady/src/utils/EnumerableSetLib.sol";
 
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
+
+    // using EnumerableSetLib for EnumerableSetLib.AddressSet;
 
     function setUp() public {
         // Empty setup - each test will handle its own setup
@@ -42,6 +45,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](8);
         assets[0] = addresses.WETH;
         assets[1] = addresses.WBTC;
@@ -61,10 +65,11 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
-        // NOTE: balancer wants its assets in ascending order of their address values
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
         address[] memory balancerAssets = new address[](4);
         balancerAssets[0] = addresses.WSTETH;
         balancerAssets[1] = addresses.AAVE;
@@ -73,6 +78,9 @@ contract TremorTest is Test {
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](4);
         uniPools[0] = abi.encode(addresses.USDC, addresses.WETH, 500);
         uniPools[1] = abi.encode(addresses.WBTC, addresses.WETH, 3000);
@@ -102,6 +110,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](8);
         assets[0] = addresses.WETH;
         assets[1] = addresses.WBTC;
@@ -121,9 +130,11 @@ contract TremorTest is Test {
             } else if (maxFlashloanable >= (10 ** IERC20Metadata(assets[i]).decimals())) {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
         address[] memory balancerAssets = new address[](4);
         balancerAssets[0] = addresses.WBTC;
         balancerAssets[1] = addresses.RDNT;
@@ -132,6 +143,9 @@ contract TremorTest is Test {
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](4);
         uniPools[0] = abi.encode(addresses.WBTC, addresses.WETH, 500);
         uniPools[1] = abi.encode(addresses.WETH, addresses.USDC, 500);
@@ -161,6 +175,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](8);
         assets[0] = addresses.WETH;
         assets[1] = addresses.USDC;
@@ -180,11 +195,15 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
+        /// @dev specify all the assets you want to flash loan from balancer, here
         address[] memory balancerAssets = new address[](0);
 
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](3);
         uniPools[0] = abi.encode(addresses.WETH, addresses.OP, uint16(3000));
         uniPools[1] = abi.encode(addresses.USDC, addresses.WETH, uint16(500));
@@ -213,6 +232,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](7);
         assets[0] = addresses.WBTC;
         assets[1] = addresses.WETH;
@@ -231,9 +251,10 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
+        /// @dev specify all the assets you want to flash loan from balancer, here
         address[] memory balancerAssets = new address[](5);
         balancerAssets[0] = addresses.WMATIC;
         balancerAssets[1] = addresses.USDC;
@@ -241,6 +262,9 @@ contract TremorTest is Test {
         balancerAssets[3] = addresses.TEL;
         balancerAssets[4] = addresses.MATICX;
 
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](3);
         uniPools[0] = abi.encode(addresses.WBTC, addresses.WETH, uint16(500));
         uniPools[1] = abi.encode(addresses.USDCe, addresses.USDC, uint16(100));
@@ -272,6 +296,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](6);
         assets[0] = addresses.WETH;
         assets[1] = addresses.WE_ETH;
@@ -289,14 +314,18 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
+        /// @dev specify all the assets you want to flash loan from balancer, here
         address[] memory balancerAssets = new address[](3);
         balancerAssets[0] = addresses.WETH;
         balancerAssets[1] = addresses.WSTETH;
         balancerAssets[2] = addresses.RDNT;
 
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](3);
         uniPools[0] = abi.encode(addresses.WETH, addresses.USDC, uint16(500));
         uniPools[1] = abi.encode(addresses.WETH, addresses.DEGEN, uint16(3000));
@@ -325,6 +354,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](7);
         assets[0] = addresses.BTC_b;
         assets[1] = addresses.WAVAX;
@@ -343,10 +373,11 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
-        // NOTE: balancer likes its assets ascending ordered
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
         address[] memory balancerAssets = new address[](4);
         balancerAssets[0] = addresses.sAVAX;
         balancerAssets[1] = addresses.ggAVAX;
@@ -355,7 +386,9 @@ contract TremorTest is Test {
 
         // balancer charges 0 flash-loan fees <3
 
-        // NOTE: uniV3 likes its pool tokens in certain order
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](3);
         uniPools[0] = abi.encode(addresses.WETH_e, addresses.WAVAX, 500);
         uniPools[1] = abi.encode(addresses.WAVAX, addresses.USDC, 500);
@@ -384,6 +417,7 @@ contract TremorTest is Test {
 
         vm.label(address(pool), "AAVE_POOL");
 
+        /// @dev specify all the assets you want to flash loan from aave, here
         address[] memory assets = new address[](7);
         assets[0] = addresses.BTCB;
         assets[1] = addresses.WBNB;
@@ -403,15 +437,18 @@ contract TremorTest is Test {
             } else {
                 amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
             }
-            console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
         }
 
-        // NOTE: balancer likes its assets ascending ordered
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
         address[] memory balancerAssets = new address[](0);
 
         // balancer charges 0 flash-loan fees <3
 
-        // NOTE: uniV3 likes its pool tokens in certain order
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
         bytes[] memory uniPools = new bytes[](3);
         uniPools[0] = abi.encode(addresses.ETH, addresses.WBNB, 500);
         uniPools[1] = abi.encode(addresses.USDT, addresses.USDC, 100);
@@ -456,91 +493,6 @@ contract TremorTest is Test {
             );
         }
     }
-
-    // function test_dominoeFlashLoans_zksync() public {
-    //     vm.createSelectFork(vm.envString("ZKSYNC_RPC_URL"));
-
-    //     Addresses.ZkSyncAddresses memory addresses = Addresses.zkSyncAddresses();
-
-    //     // Skip if ADDRESSES_PROVIDER is not available
-    //     if (addresses.provider.ADDRESSES_PROVIDER == address(0)) return;
-
-    //     pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
-
-    //     tremor = new Tremor(
-    //         addresses.provider.ADDRESSES_PROVIDER,
-    //         address(pool),
-    //         addresses.provider.UNI_V3_FACTORY,
-    //         addresses.provider.SWAP_ROUTER,
-    //         addresses.provider.BAL_VAULT,
-    //         addresses.WETH
-    //     );
-
-    //     vm.label(address(pool), "AAVE_POOL");
-
-    //     address[] memory assets = new address[](5);
-    //     assets[0] = addresses.WETH;
-    //     assets[1] = addresses.USDC;
-    //     assets[2] = addresses.WBTC;
-    //     assets[3] = addresses.WSTETH;
-    //     assets[4] = addresses.USDT;
-
-    //     uint256[] memory amounts = new uint256[](assets.length);
-    //     for (uint256 i = 0; i < assets.length; i++) {
-    //         amounts[i] = IERC20(assets[i]).balanceOf(address(pool)) * 999 / 1000;
-    //     }
-
-    //     // Skip balancer assets as BAL_VAULT is not available
-    //     address[] memory balancerAssets = new address[](0);
-    //     // Skip uniPools as UNI_V3_FACTORY is not available
-    //     bytes[] memory uniPools = new bytes[](0);
-
-    //     tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools);
-    // }
-
-    // function test_dominoeFlashLoans_fantom() public {
-    //     vm.createSelectFork(vm.envString("FANTOM_RPC_URL"));
-
-    //     Addresses.FantomAddresses memory addresses = Addresses.fantomAddresses();
-
-    //     // Skip if ADDRESSES_PROVIDER is not available
-    //     if (addresses.provider.ADDRESSES_PROVIDER == address(0)) return;
-
-    //     pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
-
-    //     tremor = new Tremor(
-    //         addresses.provider.ADDRESSES_PROVIDER,
-    //         address(pool),
-    //         addresses.provider.UNI_V3_FACTORY,
-    //         addresses.provider.SWAP_ROUTER,
-    //         addresses.provider.BAL_VAULT,
-    //         addresses.WETH
-    //     );
-
-    //     vm.label(address(pool), "AAVE_POOL");
-
-    //     address[] memory assets = new address[](5);
-    //     assets[0] = addresses.WETH;
-    //     assets[1] = addresses.USDC;
-    //     assets[2] = addresses.WBTC;
-    //     assets[3] = addresses.LINK;
-    //     assets[4] = addresses.USDT;
-
-    //     uint256[] memory amounts = new uint256[](assets.length);
-    //     for (uint256 i = 0; i < assets.length; i++) {
-    //         amounts[i] = IERC20(assets[i]).balanceOf(address(pool)) * 999 / 1000;
-    //     }
-
-    //     address[] memory balancerAssets = new address[](3);
-    //     balancerAssets[0] = addresses.WBTC;
-    //     balancerAssets[1] = addresses.WETH;
-    //     balancerAssets[2] = addresses.USDC;
-
-    //     // Skip uniPools as UNI_V3_FACTORY is not available
-    //     bytes[] memory uniPools = new bytes[](0);
-
-    //     tremor.dominoeFlashLoans(assets, amounts, balancerAssets, uniPools);
-    // }
 
     function toLowerCase(string memory str) internal pure returns (string memory) {
         bytes memory bStr = bytes(str);
