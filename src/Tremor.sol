@@ -4,7 +4,7 @@ pragma solidity ^0.8.10;
 import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {IFlashLoanSimpleReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IFlashLoanReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanReceiver.sol";
-// import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// IERC20 already imported in PeripheryPayments
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
@@ -20,19 +20,20 @@ import "@uniswap/v3-periphery/contracts/libraries/CallbackValidation.sol";
 import {IVault} from "@balancer-labs/v2-interfaces/contracts/vault/IVault.sol";
 import {IFlashLoanRecipient} from "@balancer-labs/v2-interfaces/contracts/vault/IFlashLoanRecipient.sol";
 import {IERC20 as IERC20_BAL} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
-import {EnumerableSetLib} from "@solady/src/utils/EnumerableSetLib.sol";
 import {console} from "forge-std/Test.sol";
 
 contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallback, PeripheryPayments {
-    using EnumerableSetLib for EnumerableSetLib.AddressSet;
+    uint256 constant ASSETS_BASE_SLOT = 0x3B9ACA00; // Base slot for our array of assets = 1 billy
+    uint256 constant ASSETS_LENGTH_SLOT = 0x77359400; // Slot to store length = 2 billy
+    uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xB2D05E00; // Base slot for existence mapping = 3 billy
+    uint256 constant UNI_POOLS_SIZE_SLOT = 0xC0FFEEBABE; // Slot to store uniPools' size = 3.254 billy
+    uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADBEEF; // Slot to store next pool index = 3.735 billy
 
     address internal _addressesProvider;
     IPool internal _aavePool;
     address internal _uniV3Factory;
     IVault internal _balancerVault;
     ISwapRouter internal _uniswapRouter;
-    // TODO: tstore these
-    EnumerableSetLib.AddressSet internal _allAssets;
 
     struct FlashParams {
         address token0;
@@ -80,14 +81,15 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     function dominoeFlashLoans(
         address[] calldata aaveAssets_,
         uint256[] calldata aaveAmounts_,
-        address[] calldata balancerAssets_,
+        IERC20_BAL[] calldata balancerAssets_,
+        uint256[] calldata balancerAmounts_,
         bytes[] calldata uniPools_
     ) external {
         for (uint256 i = 0; i < aaveAssets_.length; i++) {
-            _allAssets.add(aaveAssets_[i]);
+            _addToAssetSet(aaveAssets_[i]);
         }
         for (uint256 i = 0; i < balancerAssets_.length; i++) {
-            _allAssets.add(balancerAssets_[i]);
+            _addToAssetSet(address(balancerAssets_[i]));
         }
 
         uint256[] memory interestRateModes = new uint256[](aaveAssets_.length);
@@ -97,7 +99,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             aaveAmounts_,
             interestRateModes,
             address(0),
-            abi.encode(balancerAssets_, uniPools_),
+            abi.encode(balancerAssets_, balancerAmounts_, uniPools_),
             0
         );
     }
@@ -115,16 +117,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             IERC20(assets_[i]).approve(address(_aavePool), amounts_[i] + premiums_[i]);
         }
 
-        (address[] memory balancerAssets, bytes[] memory uniPools) = abi.decode(params_, (address[], bytes[]));
+        (IERC20_BAL[] memory balancerAssets, uint256[] memory balancerAmounts, bytes[] memory uniPools) =
+            abi.decode(params_, (IERC20_BAL[], uint256[], bytes[]));
         // call balancer flash loan and from its callback, call uniswap flash loans
-        uint256[] memory balancerAmounts = new uint256[](balancerAssets.length);
-        // TODO: fix IERC20_BAL quirk
-        IERC20_BAL[] memory balTokens = new IERC20_BAL[](balancerAssets.length);
-        for (uint256 i = 0; i < balancerAssets.length; i++) {
-            balancerAmounts[i] = IERC20(balancerAssets[i]).balanceOf(address(_balancerVault));
-            balTokens[i] = IERC20_BAL(balancerAssets[i]);
-        }
-        _balancerVault.flashLoan(this, balTokens, balancerAmounts, abi.encode(uniPools));
+        _balancerVault.flashLoan(this, balancerAssets, balancerAmounts, abi.encode(uniPools));
         return true;
     }
 
@@ -140,10 +136,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         // initiate uniV3 flash loans
         bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
         if (uniPools.length > 0) {
-            // systematically storing uni pool addresses and fees in transient storage
+            // linearly storing uni pool addresses and fees in transient storage slots 0x00, 0x01, 0x02, ...
             assembly {
-                tstore(0x00, mload(uniPools))
-                let offset := 0x40 // since 0x00, 0x20 stores uniPools' size and nextPoolIndex
+                tstore(UNI_POOLS_SIZE_SLOT, mload(uniPools))
+                // simple slot to start storing uni pool addresses and fees at
+                let offset := 0x00
                 let uniPtr := add(add(uniPools, 0x20), mul(0x20, mload(uniPools)))
                 for { let i := 0 } lt(i, mload(uniPools)) { i := add(i, 1) } {
                     uniPtr := add(uniPtr, 0x20) // skip size of uniPools[i]
@@ -151,10 +148,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     let addr2 := mload(add(uniPtr, 0x20))
                     let fee := mload(add(uniPtr, 0x40))
                     uniPtr := add(uniPtr, 0x60)
-                    tstore(offset, and(addr1, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))
-                    tstore(add(offset, 0x20), and(addr2, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))
-                    tstore(add(offset, 0x40), and(fee, 0xFFFF))
-                    offset := add(offset, 0x60)
+                    // no masking of addr1, addr2 and fee needed based off tests
+                    tstore(offset, addr1)
+                    tstore(add(offset, 0x01), addr2)
+                    tstore(add(offset, 0x02), fee)
+                    offset := add(offset, 0x03)
                 }
             }
 
@@ -162,14 +160,14 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             address tokenB;
             uint16 feeAB;
             assembly {
-                tokenA := tload(0x40)
-                tokenB := tload(0x60)
-                feeAB := tload(0x80)
+                tokenA := tload(0x00)
+                tokenB := tload(0x01)
+                feeAB := tload(0x02)
             }
 
             // remembering new assets added
-            _allAssets.add(tokenA);
-            _allAssets.add(tokenB);
+            _addToAssetSet(tokenA);
+            _addToAssetSet(tokenB);
 
             IUniswapV3Pool uniPool = IUniswapV3Pool(
                 PoolAddress.computeAddress(
@@ -181,8 +179,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     token0: tokenA,
                     token1: tokenB,
                     fee1: feeAB,
-                    amount0: (IERC20(tokenA).balanceOf(address(uniPool)) * 99) / 100, // could test withdrawable limits further here
-                    amount1: (IERC20(tokenB).balanceOf(address(uniPool)) * 99) / 100, // could test withdrawable limits further here
+                    amount0: (IERC20(tokenA).balanceOf(address(uniPool)) * 999) / 1000, // could test withdrawable limits further here
+                    amount1: (IERC20(tokenB).balanceOf(address(uniPool)) * 999) / 1000, // could test withdrawable limits further here
                     fee2: 3000,
                     fee3: 10000
                 }),
@@ -198,7 +196,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
     function _initFlash(FlashParams memory params_, uint256 nextPoolIndex_) internal {
         assembly {
-            tstore(0x20, nextPoolIndex_)
+            tstore(NEXT_POOL_INDEX_SLOT, nextPoolIndex_)
         }
         PoolAddress.PoolKey memory poolKey =
             PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
@@ -237,19 +235,19 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256 uniPoolsSize;
         uint256 nextPoolIndex;
         assembly {
-            uniPoolsSize := tload(0x00)
-            nextPoolIndex := tload(0x20)
+            uniPoolsSize := tload(UNI_POOLS_SIZE_SLOT)
+            nextPoolIndex := tload(NEXT_POOL_INDEX_SLOT)
         }
         if (nextPoolIndex < uniPoolsSize) {
             assembly {
-                tokenA := tload(add(0x40, mul(nextPoolIndex, 0x60)))
-                tokenB := tload(add(0x60, mul(nextPoolIndex, 0x60)))
-                feeAB := tload(add(0x80, mul(nextPoolIndex, 0x60)))
+                tokenA := tload(add(0x00, mul(nextPoolIndex, 0x03)))
+                tokenB := tload(add(0x01, mul(nextPoolIndex, 0x03)))
+                feeAB := tload(add(0x02, mul(nextPoolIndex, 0x03)))
             }
 
             // remembering new assets added
-            _allAssets.add(tokenA);
-            _allAssets.add(tokenB);
+            _addToAssetSet(tokenA);
+            _addToAssetSet(tokenB);
             // call _initFlash() recursively
             IUniswapV3Pool uniPool = IUniswapV3Pool(
                 PoolAddress.computeAddress(
@@ -269,8 +267,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                 ++nextPoolIndex // next pool's index for nextPoolIndex
             );
         } else {
-            // NOTE: let the games begin
+            // NOTE: WHY SO SERIOUS?
             _letsPutASmileOnThatFace();
+
+            _cleanTstoreSlots();
         }
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
@@ -279,15 +279,62 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
     function _letsPutASmileOnThatFace() internal {
         console.log("let's put a smile on that face ;)");
+
+        uint256 length;
         address asset;
-        for (uint256 i = 0; i < _allAssets.length(); ++i) {
-            asset = _allAssets.at(i);
+        assembly {
+            length := tload(ASSETS_LENGTH_SLOT)
+        }
+
+        // Iterate through the array portion where we stored the assets sequentially
+        for (uint256 i = 0; i < length; ++i) {
+            assembly {
+                asset := tload(add(ASSETS_BASE_SLOT, i))
+            }
             console.log(
                 IERC20Metadata(asset).symbol(),
                 IERC20(asset).balanceOf(address(this)) / (10 ** IERC20Metadata(asset).decimals())
             );
         }
 
-        // do interesting stuff here with your 1-block riches
+        //~~~~~~~ do interesting stuff here with your 1-block riches ~~~~~~~//
+    }
+
+    function _addToAssetSet(address asset) internal {
+        assembly {
+            // Check if asset already exists using the asset address as key
+            let exists := tload(add(ASSETS_EXISTS_BASE_SLOT, asset))
+
+            // If it doesn't exist, add it
+            if iszero(exists) {
+                // Mark as existing
+                tstore(add(ASSETS_EXISTS_BASE_SLOT, asset), 1)
+
+                // Add to array
+                let currentLength := tload(ASSETS_LENGTH_SLOT)
+                tstore(add(ASSETS_BASE_SLOT, currentLength), asset)
+                // Increment length
+                tstore(ASSETS_LENGTH_SLOT, add(currentLength, 1))
+            }
+        }
+    }
+
+    function _cleanTstoreSlots() internal {
+        assembly {
+            for { let i := 0 } lt(i, tload(UNI_POOLS_SIZE_SLOT)) { i := add(i, 1) } {
+                tstore(add(0x00, mul(i, 0x03)), 0)
+                tstore(add(0x01, mul(i, 0x03)), 0)
+                tstore(add(0x02, mul(i, 0x03)), 0)
+            }
+            tstore(UNI_POOLS_SIZE_SLOT, 0)
+            tstore(NEXT_POOL_INDEX_SLOT, 0)
+
+            // clear assets
+            for { let i := 0 } lt(i, tload(ASSETS_LENGTH_SLOT)) { i := add(i, 1) } {
+                tstore(add(ASSETS_EXISTS_BASE_SLOT, tload(add(ASSETS_BASE_SLOT, i))), 0)
+                tstore(add(ASSETS_BASE_SLOT, i), 0)
+            }
+            tstore(ASSETS_LENGTH_SLOT, 0)
+        }
     }
 }
