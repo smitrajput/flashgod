@@ -15,14 +15,17 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {Addresses} from "../src/config/Addresses.sol";
-import {EnumerableSetLib} from "@solady/src/utils/EnumerableSetLib.sol";
-import {IERC20 as IERC20_BAL} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
+// import {IERC20 as IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 
 contract TremorTest is Test {
     Tremor public tremor;
     IPool public pool;
 
-    // using EnumerableSetLib for EnumerableSetLib.AddressSet;
+    struct UniPool {
+        address token0;
+        address token1;
+        uint16 fee;
+    }
 
     function setUp() public {
         // Empty setup - each test will handle its own setup
@@ -71,14 +74,16 @@ contract TremorTest is Test {
 
         /// @dev specify all the assets you want to flash loan from balancer, here
         /// NOTE: balancer likes its assets ascending ordered
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](4);
-        balancerAssets[0] = IERC20_BAL(addresses.WSTETH);
-        balancerAssets[1] = IERC20_BAL(addresses.AAVE);
-        balancerAssets[2] = IERC20_BAL(addresses.BAL);
-        balancerAssets[3] = IERC20_BAL(addresses.WETH);
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.WSTETH);
+        balancerAssets[1] = IERC20(addresses.AAVE);
+        balancerAssets[2] = IERC20(addresses.BAL);
+        balancerAssets[3] = IERC20(addresses.WETH);
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](4);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
             balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
@@ -87,11 +92,36 @@ contract TremorTest is Test {
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](4);
+        uniPoolValues[0] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WBTC, token1: addresses.WETH, fee: 3000});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.USDT, fee: 3000});
+        uniPoolValues[3] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 3000});
+
+        address[] memory uniPoolAddresses = new address[](4);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](4);
-        uniPools[0] = abi.encode(addresses.USDC, addresses.WETH, 500);
-        uniPools[1] = abi.encode(addresses.WBTC, addresses.WETH, 3000);
-        uniPools[2] = abi.encode(addresses.WETH, addresses.USDT, 3000);
-        uniPools[3] = abi.encode(addresses.USDC, addresses.WETH, 3000);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -141,14 +171,16 @@ contract TremorTest is Test {
 
         /// @dev specify all the assets you want to flash loan from balancer, here
         /// NOTE: balancer likes its assets ascending ordered
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](4);
-        balancerAssets[0] = IERC20_BAL(addresses.WBTC);
-        balancerAssets[1] = IERC20_BAL(addresses.RDNT);
-        balancerAssets[2] = IERC20_BAL(addresses.WETH);
-        balancerAssets[3] = IERC20_BAL(addresses.USDC);
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.WBTC);
+        balancerAssets[1] = IERC20(addresses.RDNT);
+        balancerAssets[2] = IERC20(addresses.WETH);
+        balancerAssets[3] = IERC20(addresses.USDC);
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](4);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
             balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
@@ -157,11 +189,36 @@ contract TremorTest is Test {
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](4);
+        uniPoolValues[0] = UniPool({token0: addresses.WBTC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WETH, token1: addresses.USDC, fee: 500});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.GMX, fee: 10000});
+        uniPoolValues[3] = UniPool({token0: addresses.WBTC, token1: addresses.USDT, fee: 500});
+
+        address[] memory uniPoolAddresses = new address[](4);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](4);
-        uniPools[0] = abi.encode(addresses.WBTC, addresses.WETH, 500);
-        uniPools[1] = abi.encode(addresses.WETH, addresses.USDC, 500);
-        uniPools[2] = abi.encode(addresses.WETH, addresses.GMX, 10000);
-        uniPools[3] = abi.encode(addresses.WBTC, addresses.USDT, 500);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 550, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -210,17 +267,44 @@ contract TremorTest is Test {
         }
 
         /// @dev specify all the assets you want to flash loan from balancer, here
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](0);
+        IERC20[] memory balancerAssets = new IERC20[](0);
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 0% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](0);
 
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](3);
+        uniPoolValues[0] = UniPool({token0: addresses.WETH, token1: addresses.OP, fee: 3000});
+        uniPoolValues[1] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.WBTC, fee: 500});
+
+        address[] memory uniPoolAddresses = new address[](3);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](3);
-        uniPools[0] = abi.encode(addresses.WETH, addresses.OP, uint16(3000));
-        uniPools[1] = abi.encode(addresses.USDC, addresses.WETH, uint16(500));
-        uniPools[2] = abi.encode(addresses.WETH, addresses.WBTC, uint16(500));
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -268,13 +352,15 @@ contract TremorTest is Test {
         }
 
         /// @dev specify all the assets you want to flash loan from balancer, here
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](5);
-        balancerAssets[0] = IERC20_BAL(addresses.WMATIC);
-        balancerAssets[1] = IERC20_BAL(addresses.USDC);
-        balancerAssets[2] = IERC20_BAL(addresses.WETH);
-        balancerAssets[3] = IERC20_BAL(addresses.TEL);
-        balancerAssets[4] = IERC20_BAL(addresses.MATICX);
+        IERC20[] memory balancerAssets = new IERC20[](5);
+        balancerAssets[0] = IERC20(addresses.WMATIC);
+        balancerAssets[1] = IERC20(addresses.USDC);
+        balancerAssets[2] = IERC20(addresses.WETH);
+        balancerAssets[3] = IERC20(addresses.TEL);
+        balancerAssets[4] = IERC20(addresses.MATICX);
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](5);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
             balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
@@ -283,10 +369,35 @@ contract TremorTest is Test {
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](3);
+        uniPoolValues[0] = UniPool({token0: addresses.WBTC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.USDCe, token1: addresses.USDC, fee: 100});
+        uniPoolValues[2] = UniPool({token0: addresses.USDCe, token1: addresses.WETH, fee: 500});
+
+        address[] memory uniPoolAddresses = new address[](3);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](3);
-        uniPools[0] = abi.encode(addresses.WBTC, addresses.WETH, uint16(500));
-        uniPools[1] = abi.encode(addresses.USDCe, addresses.USDC, uint16(100));
-        uniPools[2] = abi.encode(addresses.USDCe, addresses.WETH, uint16(500));
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -336,11 +447,13 @@ contract TremorTest is Test {
         }
 
         /// @dev specify all the assets you want to flash loan from balancer, here
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](3);
-        balancerAssets[0] = IERC20_BAL(addresses.WETH);
-        balancerAssets[1] = IERC20_BAL(addresses.WSTETH);
-        balancerAssets[2] = IERC20_BAL(addresses.RDNT);
+        IERC20[] memory balancerAssets = new IERC20[](3);
+        balancerAssets[0] = IERC20(addresses.WETH);
+        balancerAssets[1] = IERC20(addresses.WSTETH);
+        balancerAssets[2] = IERC20(addresses.RDNT);
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](3);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
             balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
@@ -349,10 +462,35 @@ contract TremorTest is Test {
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](3);
+        uniPoolValues[0] = UniPool({token0: addresses.WETH, token1: addresses.USDC, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WETH, token1: addresses.DEGEN, fee: 3000});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.CB_BTC, fee: 3000});
+
+        address[] memory uniPoolAddresses = new address[](3);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](3);
-        uniPools[0] = abi.encode(addresses.WETH, addresses.USDC, uint16(500));
-        uniPools[1] = abi.encode(addresses.WETH, addresses.DEGEN, uint16(3000));
-        uniPools[2] = abi.encode(addresses.WETH, addresses.CB_BTC, uint16(3000));
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -401,14 +539,16 @@ contract TremorTest is Test {
 
         /// @dev specify all the assets you want to flash loan from balancer, here
         /// NOTE: balancer likes its assets ascending ordered
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](4);
-        balancerAssets[0] = IERC20_BAL(addresses.sAVAX);
-        balancerAssets[1] = IERC20_BAL(addresses.ggAVAX);
-        balancerAssets[2] = IERC20_BAL(addresses.WAVAX);
-        balancerAssets[3] = IERC20_BAL(addresses.USDC);
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.sAVAX);
+        balancerAssets[1] = IERC20(addresses.ggAVAX);
+        balancerAssets[2] = IERC20(addresses.WAVAX);
+        balancerAssets[3] = IERC20(addresses.USDC);
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](4);
         for (uint256 i = 0; i < balancerAssets.length; i++) {
             balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
@@ -417,10 +557,35 @@ contract TremorTest is Test {
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](3);
+        uniPoolValues[0] = UniPool({token0: addresses.WETH_e, token1: addresses.WAVAX, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WAVAX, token1: addresses.USDC, fee: 500});
+        uniPoolValues[2] = UniPool({token0: addresses.BTC_b, token1: addresses.USDC, fee: 3000});
+
+        address[] memory uniPoolAddresses = new address[](3);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](3);
-        uniPools[0] = abi.encode(addresses.WETH_e, addresses.WAVAX, 500);
-        uniPools[1] = abi.encode(addresses.WAVAX, addresses.USDC, 500);
-        uniPools[2] = abi.encode(addresses.BTC_b, addresses.USDC, 3000);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
@@ -470,19 +635,46 @@ contract TremorTest is Test {
 
         /// @dev specify all the assets you want to flash loan from balancer, here
         /// NOTE: balancer likes its assets ascending ordered
-        IERC20_BAL[] memory balancerAssets = new IERC20_BAL[](0);
+        IERC20[] memory balancerAssets = new IERC20[](0);
 
         // balancer charges 0 flash-loan fees <3
 
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 0% of balancer TVL
         uint256[] memory balancerAmounts = new uint256[](0);
 
         /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
         /// want to flash loan assets from
         /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](3);
+        uniPoolValues[0] = UniPool({token0: addresses.ETH, token1: addresses.WBNB, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.USDT, token1: addresses.USDC, fee: 100});
+        uniPoolValues[2] = UniPool({token0: addresses.ETH, token1: addresses.USDT, fee: 500});
+
+        address[] memory uniPoolAddresses = new address[](3);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
         bytes[] memory uniPools = new bytes[](3);
-        uniPools[0] = abi.encode(addresses.ETH, addresses.WBNB, 500);
-        uniPools[1] = abi.encode(addresses.USDT, addresses.USDC, 100);
-        uniPools[2] = abi.encode(addresses.ETH, addresses.USDT, 500);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 

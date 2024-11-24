@@ -147,22 +147,30 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     let addr1 := mload(uniPtr)
                     let addr2 := mload(add(uniPtr, 0x20))
                     let fee := mload(add(uniPtr, 0x40))
-                    uniPtr := add(uniPtr, 0x60)
+                    let amount0 := mload(add(uniPtr, 0x60))
+                    let amount1 := mload(add(uniPtr, 0x80))
+                    uniPtr := add(uniPtr, 0xA0) // skip 5 elements
                     // no masking of addr1, addr2 and fee needed based off tests
                     tstore(offset, addr1)
                     tstore(add(offset, 0x01), addr2)
                     tstore(add(offset, 0x02), fee)
-                    offset := add(offset, 0x03)
+                    tstore(add(offset, 0x03), amount0)
+                    tstore(add(offset, 0x04), amount1)
+                    offset := add(offset, 0x05)
                 }
             }
 
             address tokenA;
             address tokenB;
             uint16 feeAB;
+            uint256 amountA;
+            uint256 amountB;
             assembly {
                 tokenA := tload(0x00)
                 tokenB := tload(0x01)
                 feeAB := tload(0x02)
+                amountA := tload(0x03)
+                amountB := tload(0x04)
             }
 
             // remembering new assets added
@@ -179,8 +187,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     token0: tokenA,
                     token1: tokenB,
                     fee1: feeAB,
-                    amount0: (IERC20(tokenA).balanceOf(address(uniPool)) * 999) / 1000, // could test withdrawable limits further here
-                    amount1: (IERC20(tokenB).balanceOf(address(uniPool)) * 999) / 1000, // could test withdrawable limits further here
+                    amount0: amountA,
+                    amount1: amountB,
                     fee2: 3000,
                     fee3: 10000
                 }),
@@ -232,6 +240,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         address tokenA;
         address tokenB;
         uint16 feeAB;
+        uint256 amountA;
+        uint256 amountB;
         uint256 uniPoolsSize;
         uint256 nextPoolIndex;
         assembly {
@@ -240,9 +250,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         }
         if (nextPoolIndex < uniPoolsSize) {
             assembly {
-                tokenA := tload(add(0x00, mul(nextPoolIndex, 0x03)))
-                tokenB := tload(add(0x01, mul(nextPoolIndex, 0x03)))
-                feeAB := tload(add(0x02, mul(nextPoolIndex, 0x03)))
+                tokenA := tload(add(0x00, mul(nextPoolIndex, 0x05)))
+                tokenB := tload(add(0x01, mul(nextPoolIndex, 0x05)))
+                feeAB := tload(add(0x02, mul(nextPoolIndex, 0x05)))
+                amountA := tload(add(0x03, mul(nextPoolIndex, 0x05)))
+                amountB := tload(add(0x04, mul(nextPoolIndex, 0x05)))
             }
 
             // remembering new assets added
@@ -259,8 +271,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     token0: tokenA,
                     token1: tokenB,
                     fee1: feeAB,
-                    amount0: IERC20(tokenA).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
-                    amount1: IERC20(tokenB).balanceOf(address(uniPool)) * 999 / 1000, // could test withdrawable limits further here
+                    amount0: amountA,
+                    amount1: amountB,
                     fee2: 3000,
                     fee3: 10000
                 }),
