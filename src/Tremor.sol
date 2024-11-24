@@ -138,17 +138,24 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         if (uniPools.length > 0) {
             // linearly storing uni pool addresses and fees in transient storage slots 0x00, 0x01, 0x02, ...
             assembly {
+                let addr1
+                let addr2
+                let fee
+                let amount0
+                let amount1
+                let offset
+                let uniPtr
                 tstore(UNI_POOLS_SIZE_SLOT, mload(uniPools))
                 // simple slot to start storing uni pool addresses and fees at
-                let offset := 0x00
-                let uniPtr := add(add(uniPools, 0x20), mul(0x20, mload(uniPools)))
+                offset := 0x00
+                uniPtr := add(add(uniPools, 0x20), mul(0x20, mload(uniPools)))
                 for { let i := 0 } lt(i, mload(uniPools)) { i := add(i, 1) } {
                     uniPtr := add(uniPtr, 0x20) // skip size of uniPools[i]
-                    let addr1 := mload(uniPtr)
-                    let addr2 := mload(add(uniPtr, 0x20))
-                    let fee := mload(add(uniPtr, 0x40))
-                    let amount0 := mload(add(uniPtr, 0x60))
-                    let amount1 := mload(add(uniPtr, 0x80))
+                    addr1 := mload(uniPtr)
+                    addr2 := mload(add(uniPtr, 0x20))
+                    fee := mload(add(uniPtr, 0x40))
+                    amount0 := mload(add(uniPtr, 0x60))
+                    amount1 := mload(add(uniPtr, 0x80))
                     uniPtr := add(uniPtr, 0xA0) // skip 5 elements
                     // no masking of addr1, addr2 and fee needed based off tests
                     tstore(offset, addr1)
