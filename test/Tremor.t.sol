@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.10;
 
-import {Tremor} from "../src/Tremor.sol";
 import {IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
@@ -9,13 +8,11 @@ import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import {Pair1Flash} from "../src/Pair1Flash.sol";
-import {Pair2Flash} from "../src/Pair2Flash.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
-import {Test, console, Vm} from "forge-std/Test.sol";
+import {Tremor} from "../src/Tremor.sol";
 import {Addresses} from "../src/config/Addresses.sol";
-// import {IERC20 as IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 
 contract TremorTest is Test {
     Tremor public tremor;

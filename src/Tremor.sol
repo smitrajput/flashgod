@@ -23,18 +23,6 @@ import {IERC20 as IERC20_BAL} from "@balancer-labs/v2-interfaces/contracts/solid
 import {console} from "forge-std/Test.sol";
 
 contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallback, PeripheryPayments {
-    uint256 constant ASSETS_BASE_SLOT = 0x3B9ACA00; // Base slot for our array of assets = 1 billy
-    uint256 constant ASSETS_LENGTH_SLOT = 0x77359400; // Slot to store length = 2 billy
-    uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xB2D05E00; // Base slot for existence mapping = 3 billy
-    uint256 constant UNI_POOLS_SIZE_SLOT = 0xC0FFEEBABE; // Slot to store uniPools' size = 3.254 billy
-    uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADBEEF; // Slot to store next pool index = 3.735 billy
-
-    address internal _addressesProvider;
-    IPool internal _aavePool;
-    address internal _uniV3Factory;
-    IVault internal _balancerVault;
-    ISwapRouter internal _uniswapRouter;
-
     struct FlashParams {
         address token0;
         uint24 fee1;
@@ -54,6 +42,41 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint24 poolFee3;
         PoolAddress.PoolKey poolKey;
     }
+
+    uint256 constant ASSETS_BASE_SLOT = 0x3B9ACA00; // Base slot for our array of assets = 1 billy
+    uint256 constant ASSETS_LENGTH_SLOT = 0x77359400; // Slot to store length = 2 billy
+    uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xB2D05E00; // Base slot for existence mapping = 3 billy
+    uint256 constant UNI_POOLS_SIZE_SLOT = 0xC0FFEEBABE; // Slot to store uniPools' size = 3.254 billy
+    uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADBEEF; // Slot to store next pool index = 3.735 billy
+
+    address internal _addressesProvider;
+    IPool internal _aavePool;
+    address internal _uniV3Factory;
+    ISwapRouter internal _uniswapRouter;
+    IVault internal _balancerVault;
+
+    event DominoeFlashLoansInitiated(
+        address[] aaveAssets,
+        uint256[] aaveAmounts,
+        address[] balancerAssets,
+        uint256[] balancerAmounts,
+        uint256 uniPoolsCount
+    );
+    event AaveFlashLoanExecuted(address[] assets, uint256[] amounts, uint256[] premiums, address initiator);
+    event BalancerFlashLoanReceived(address[] tokens, uint256[] amounts, uint256[] feeAmounts);
+    event UniswapFlashLoanInitiated(
+        address token0, address token1, uint24 fee, uint256 amount0, uint256 amount1, uint256 poolIndex
+    );
+    event UniswapFlashLoanCallback(
+        address token0, address token1, uint256 amount0Owed, uint256 amount1Owed, uint256 nextPoolIndex
+    );
+    event AssetAdded(address asset, uint256 newLength);
+    event TremorBalances(address asset, string symbol, uint256 balance);
+
+    error LengthMismatchAave();
+    error LengthMismatchBalancer();
+    error NotAavePool();
+    error NotBalancerVault();
 
     constructor(
         address addressesProvider_,
@@ -85,6 +108,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256[] calldata balancerAmounts_,
         bytes[] calldata uniPools_
     ) external {
+        if (aaveAssets_.length != aaveAmounts_.length) revert LengthMismatchAave();
+        if (balancerAssets_.length != balancerAmounts_.length) revert LengthMismatchBalancer();
         for (uint256 i = 0; i < aaveAssets_.length; i++) {
             _addToAssetSet(aaveAssets_[i]);
         }
@@ -102,6 +127,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             abi.encode(balancerAssets_, balancerAmounts_, uniPools_),
             0
         );
+
+        emit DominoeFlashLoansInitiated(
+            aaveAssets_, aaveAmounts_, _convertToAddressArray(balancerAssets_), balancerAmounts_, uniPools_.length
+        );
     }
 
     /// @dev aave flash-loan callback
@@ -112,6 +141,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         address initiator_,
         bytes calldata params_
     ) external returns (bool) {
+        if (msg.sender != address(_aavePool)) revert NotAavePool();
+
         // approve aave pool to pull back flash loaned assets + fees
         for (uint256 i = 0; i < assets_.length; ++i) {
             IERC20(assets_[i]).approve(address(_aavePool), amounts_[i] + premiums_[i]);
@@ -120,7 +151,12 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         (IERC20_BAL[] memory balancerAssets, uint256[] memory balancerAmounts, bytes[] memory uniPools) =
             abi.decode(params_, (IERC20_BAL[], uint256[], bytes[]));
         // call balancer flash loan and from its callback, call uniswap flash loans
+        // NOTE: calling _balancerVault.flashLoan() despite balancerAssets.length == 0 since
+        // uni flash loan depends on its callback
         _balancerVault.flashLoan(this, balancerAssets, balancerAmounts, abi.encode(uniPools));
+
+        emit AaveFlashLoanExecuted(assets_, amounts_, premiums_, initiator_);
+
         return true;
     }
 
@@ -131,7 +167,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256[] memory feeAmounts_,
         bytes memory userData_
     ) external override {
-        require(msg.sender == address(_balancerVault));
+        if (msg.sender != address(_balancerVault)) revert NotBalancerVault();
 
         // initiate uniV3 flash loans
         bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
@@ -148,6 +184,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                 tstore(UNI_POOLS_SIZE_SLOT, mload(uniPools))
                 // simple slot to start storing uni pool addresses and fees at
                 offset := 0x00
+                // skipping dynamic array's size + number of headers (= uniPools[] size) which are added by compiler
+                // during encoding a dynamic array of dynamic arrays (uniPools)
                 uniPtr := add(add(uniPools, 0x20), mul(0x20, mload(uniPools)))
                 for { let i := 0 } lt(i, mload(uniPools)) { i := add(i, 1) } {
                     uniPtr := add(uniPtr, 0x20) // skip size of uniPools[i]
@@ -207,6 +245,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         for (uint256 i = 0; i < tokens_.length; i++) {
             TransferHelper.safeTransfer(address(tokens_[i]), address(_balancerVault), amounts_[i] + feeAmounts_[i]);
         }
+
+        emit BalancerFlashLoanReceived(_convertToAddressArray(tokens_), amounts_, feeAmounts_);
     }
 
     function _initFlash(FlashParams memory params_, uint256 nextPoolIndex_) internal {
@@ -230,6 +270,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                     poolFee3: params_.fee3
                 })
             )
+        );
+
+        emit UniswapFlashLoanInitiated(
+            params_.token0, params_.token1, params_.fee1, params_.amount0, params_.amount1, nextPoolIndex_
         );
     }
 
@@ -294,6 +338,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
+
+        emit UniswapFlashLoanCallback(token0, token1, amount0Owed, amount1Owed, nextPoolIndex);
     }
 
     function _letsPutASmileOnThatFace() internal {
@@ -310,22 +356,31 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             assembly {
                 asset := tload(add(ASSETS_BASE_SLOT, i))
             }
-            console.log(
-                IERC20Metadata(asset).symbol(),
-                IERC20(asset).balanceOf(address(this)) / (10 ** IERC20Metadata(asset).decimals())
-            );
+            uint256 balance = IERC20(asset).balanceOf(address(this));
+            string memory symbol = IERC20Metadata(asset).symbol();
+
+            emit TremorBalances(asset, symbol, balance);
+
+            console.log(symbol, balance / (10 ** IERC20Metadata(asset).decimals()));
         }
 
-        //~~~~~~~ do interesting stuff here with your 1-block riches ~~~~~~~//
+        ////////////////////////////////////////////////////////////////////////
+        ///~~~~~~~ do interesting stuff here with your 1-block riches ~~~~~~~///
+        ////////////////////////////////////////////////////////////////////////
     }
 
+    /// @dev a HashSet implementation for storing unique assets in O(1) time
+    /// with a separate iteratable array-like structure for accessing assets in O(1) time
     function _addToAssetSet(address asset) internal {
+        bool added;
+        uint256 newLength;
         assembly {
             // Check if asset already exists using the asset address as key
             let exists := tload(add(ASSETS_EXISTS_BASE_SLOT, asset))
 
             // If it doesn't exist, add it
             if iszero(exists) {
+                added := true
                 // Mark as existing
                 tstore(add(ASSETS_EXISTS_BASE_SLOT, asset), 1)
 
@@ -333,8 +388,13 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                 let currentLength := tload(ASSETS_LENGTH_SLOT)
                 tstore(add(ASSETS_BASE_SLOT, currentLength), asset)
                 // Increment length
-                tstore(ASSETS_LENGTH_SLOT, add(currentLength, 1))
+                newLength := add(currentLength, 1)
+                tstore(ASSETS_LENGTH_SLOT, newLength)
             }
+        }
+
+        if (added) {
+            emit AssetAdded(asset, newLength);
         }
     }
 
@@ -355,5 +415,14 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             }
             tstore(ASSETS_LENGTH_SLOT, 0)
         }
+    }
+
+    // Helper function to convert IERC20_BAL[] to address[]
+    function _convertToAddressArray(IERC20_BAL[] memory tokens) internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](tokens.length);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            addresses[i] = address(tokens[i]);
+        }
+        return addresses;
     }
 }
