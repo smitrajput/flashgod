@@ -1,6 +1,6 @@
 # flashgod
 
-Ultraliteweight flash-loan aggregator on all EVM compatible chains (with size).
+Light-weight flash-loan aggregator on all EVM compatible chains (with size).
 
 
 ### Sauce

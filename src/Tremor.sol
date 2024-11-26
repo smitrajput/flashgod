@@ -47,6 +47,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     uint256 constant ASSETS_LENGTH_SLOT = 0x77359400; // Slot to store length = 2 billy
     uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xB2D05E00; // Base slot for existence mapping = 3 billy
     uint256 constant UNI_POOLS_SIZE_SLOT = 0xC0FFEEBABE; // Slot to store uniPools' size = 3.254 billy
+    uint256 constant UNI_POOL_ADDRESS_SLOT = 0xDEADFACE; // Slot to store uniPool's address
     uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADBEEF; // Slot to store next pool index = 3.735 billy
 
     address internal _addressesProvider;
@@ -58,12 +59,12 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     event DominoeFlashLoansInitiated(
         address[] aaveAssets,
         uint256[] aaveAmounts,
-        address[] balancerAssets,
+        IERC20_BAL[] balancerAssets,
         uint256[] balancerAmounts,
         uint256 uniPoolsCount
     );
     event AaveFlashLoanExecuted(address[] assets, uint256[] amounts, uint256[] premiums, address initiator);
-    event BalancerFlashLoanReceived(address[] tokens, uint256[] amounts, uint256[] feeAmounts);
+    event BalancerFlashLoanReceived(IERC20_BAL[] tokens, uint256[] amounts, uint256[] feeAmounts);
     event UniswapFlashLoanInitiated(
         address token0, address token1, uint24 fee, uint256 amount0, uint256 amount1, uint256 poolIndex
     );
@@ -77,6 +78,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     error LengthMismatchBalancer();
     error NotAavePool();
     error NotBalancerVault();
+    error NotUniPool();
 
     constructor(
         address addressesProvider_,
@@ -110,10 +112,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     ) external {
         if (aaveAssets_.length != aaveAmounts_.length) revert LengthMismatchAave();
         if (balancerAssets_.length != balancerAmounts_.length) revert LengthMismatchBalancer();
-        for (uint256 i = 0; i < aaveAssets_.length; i++) {
-            _addToAssetSet(aaveAssets_[i]);
-        }
-        for (uint256 i = 0; i < balancerAssets_.length; i++) {
+
+        _addToAssetSet(aaveAssets_);
+        // need to call single asset variant coz of IERC20_BAL type for each balancer asset
+        for (uint256 i = 0; i < balancerAssets_.length; ++i) {
             _addToAssetSet(address(balancerAssets_[i]));
         }
 
@@ -128,9 +130,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             0
         );
 
-        emit DominoeFlashLoansInitiated(
-            aaveAssets_, aaveAmounts_, _convertToAddressArray(balancerAssets_), balancerAmounts_, uniPools_.length
-        );
+        emit DominoeFlashLoansInitiated(aaveAssets_, aaveAmounts_, balancerAssets_, balancerAmounts_, uniPools_.length);
     }
 
     /// @dev aave flash-loan callback
@@ -172,61 +172,55 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         // initiate uniV3 flash loans
         bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
         if (uniPools.length > 0) {
+            address tokenA;
+            address tokenB;
+            uint16 feeAB;
+            uint256 amountA;
+            uint256 amountB;
             // linearly storing uni pool addresses and fees in transient storage slots 0x00, 0x01, 0x02, ...
             assembly {
-                let addr1
-                let addr2
-                let fee
-                let amount0
-                let amount1
                 let offset
                 let uniPtr
                 tstore(UNI_POOLS_SIZE_SLOT, mload(uniPools))
                 // simple slot to start storing uni pool addresses and fees at
                 offset := 0x00
                 // skipping dynamic array's size + number of headers (= uniPools[] size) which are added by compiler
-                // during encoding a dynamic array of dynamic arrays (uniPools)
-                uniPtr := add(add(uniPools, 0x20), mul(0x20, mload(uniPools)))
-                for { let i := 0 } lt(i, mload(uniPools)) { i := add(i, 1) } {
-                    uniPtr := add(uniPtr, 0x20) // skip size of uniPools[i]
-                    addr1 := mload(uniPtr)
-                    addr2 := mload(add(uniPtr, 0x20))
-                    fee := mload(add(uniPtr, 0x40))
-                    amount0 := mload(add(uniPtr, 0x60))
-                    amount1 := mload(add(uniPtr, 0x80))
-                    uniPtr := add(uniPtr, 0xA0) // skip 5 elements
-                    // no masking of addr1, addr2 and fee needed based off tests
-                    tstore(offset, addr1)
-                    tstore(add(offset, 0x01), addr2)
-                    tstore(add(offset, 0x02), fee)
-                    tstore(add(offset, 0x03), amount0)
-                    tstore(add(offset, 0x04), amount1)
+                // during encoding a dynamic array of dynamic arrays (uniPools).
+                // shl(5, mload(uniPools)) == mul(mload(uniPools), 0x20)
+                // then add 0x20 to skip size of uniPools[0]
+                uniPtr := add(add(add(uniPools, 0x20), shl(5, mload(uniPools))), 0x20)
+
+                // i = 0 done here to avoid its tstore + tload coz tokenA/tokenB/... for i = 0 are
+                // used right after, in the call to _initFlash()
+                tokenA := mload(uniPtr)
+                tokenB := mload(add(uniPtr, 0x20))
+                feeAB := mload(add(uniPtr, 0x40))
+                amountA := mload(add(uniPtr, 0x60))
+                amountB := mload(add(uniPtr, 0x80))
+                // skip 5 elements + size of uniPools[i]
+                uniPtr := add(uniPtr, 0xC0)
+                // increment offset by 5
+                offset := add(offset, 0x05)
+
+                // note i = 1
+                for { let i := 1 } iszero(eq(i, mload(uniPools))) { i := add(i, 1) } {
+                    tstore(offset, mload(uniPtr))
+                    tstore(add(offset, 0x01), mload(add(uniPtr, 0x20)))
+                    tstore(add(offset, 0x02), mload(add(uniPtr, 0x40)))
+                    tstore(add(offset, 0x03), mload(add(uniPtr, 0x60)))
+                    tstore(add(offset, 0x04), mload(add(uniPtr, 0x80)))
+
+                    // skip 5 elements + size of uniPools[i]
+                    uniPtr := add(uniPtr, 0xC0)
+                    // increment offset by 5
                     offset := add(offset, 0x05)
                 }
-            }
-
-            address tokenA;
-            address tokenB;
-            uint16 feeAB;
-            uint256 amountA;
-            uint256 amountB;
-            assembly {
-                tokenA := tload(0x00)
-                tokenB := tload(0x01)
-                feeAB := tload(0x02)
-                amountA := tload(0x03)
-                amountB := tload(0x04)
             }
 
             // remembering new assets added
             _addToAssetSet(tokenA);
             _addToAssetSet(tokenB);
 
-            IUniswapV3Pool uniPool = IUniswapV3Pool(
-                PoolAddress.computeAddress(
-                    _uniV3Factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB})
-                )
-            );
             _initFlash(
                 FlashParams({
                     token0: tokenA,
@@ -242,44 +236,21 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         }
 
         // return loan to balancer vault
-        for (uint256 i = 0; i < tokens_.length; i++) {
+        for (uint256 i = 0; i < tokens_.length; ++i) {
             TransferHelper.safeTransfer(address(tokens_[i]), address(_balancerVault), amounts_[i] + feeAmounts_[i]);
         }
 
-        emit BalancerFlashLoanReceived(_convertToAddressArray(tokens_), amounts_, feeAmounts_);
-    }
-
-    function _initFlash(FlashParams memory params_, uint256 nextPoolIndex_) internal {
-        assembly {
-            tstore(NEXT_POOL_INDEX_SLOT, nextPoolIndex_)
-        }
-        PoolAddress.PoolKey memory poolKey =
-            PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
-        IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(_uniV3Factory, poolKey));
-        uniPool.flash(
-            address(this),
-            params_.amount0,
-            params_.amount1,
-            abi.encode(
-                FlashCallbackData({
-                    amount0: params_.amount0,
-                    amount1: params_.amount1,
-                    payer: msg.sender,
-                    poolKey: poolKey,
-                    poolFee2: params_.fee2,
-                    poolFee3: params_.fee3
-                })
-            )
-        );
-
-        emit UniswapFlashLoanInitiated(
-            params_.token0, params_.token1, params_.fee1, params_.amount0, params_.amount1, nextPoolIndex_
-        );
+        emit BalancerFlashLoanReceived(tokens_, amounts_, feeAmounts_);
     }
 
     function uniswapV3FlashCallback(uint256 fee0_, uint256 fee1_, bytes calldata data_) external override {
-        FlashCallbackData memory decoded = abi.decode(data_, (FlashCallbackData));
+        address uniPoolAddress;
+        assembly {
+            uniPoolAddress := tload(UNI_POOL_ADDRESS_SLOT)
+        }
+        if (msg.sender != uniPoolAddress) revert NotUniPool();
 
+        FlashCallbackData memory decoded = abi.decode(data_, (FlashCallbackData));
         address token0 = decoded.poolKey.token0;
         address token1 = decoded.poolKey.token1;
 
@@ -301,6 +272,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         }
         if (nextPoolIndex < uniPoolsSize) {
             assembly {
+                // NOTE: caching consumes more gas than recomputing everytime
+                // let nextPoolPos := mul(nextPoolIndex, 0x05)
                 tokenA := tload(add(0x00, mul(nextPoolIndex, 0x05)))
                 tokenB := tload(add(0x01, mul(nextPoolIndex, 0x05)))
                 feeAB := tload(add(0x02, mul(nextPoolIndex, 0x05)))
@@ -311,12 +284,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             // remembering new assets added
             _addToAssetSet(tokenA);
             _addToAssetSet(tokenB);
-            // call _initFlash() recursively
-            IUniswapV3Pool uniPool = IUniswapV3Pool(
-                PoolAddress.computeAddress(
-                    _uniV3Factory, PoolAddress.PoolKey({token0: tokenA, token1: tokenB, fee: feeAB})
-                )
-            );
+
             _initFlash(
                 FlashParams({
                     token0: tokenA,
@@ -340,6 +308,38 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
 
         emit UniswapFlashLoanCallback(token0, token1, amount0Owed, amount1Owed, nextPoolIndex);
+    }
+
+    function _initFlash(FlashParams memory params_, uint256 nextPoolIndex_) internal {
+        PoolAddress.PoolKey memory poolKey =
+            PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
+        IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(_uniV3Factory, poolKey));
+
+        address uniPoolAddress = address(uniPool);
+        assembly {
+            tstore(UNI_POOL_ADDRESS_SLOT, uniPoolAddress)
+            tstore(NEXT_POOL_INDEX_SLOT, nextPoolIndex_)
+        }
+
+        uniPool.flash(
+            address(this),
+            params_.amount0,
+            params_.amount1,
+            abi.encode(
+                FlashCallbackData({
+                    amount0: params_.amount0,
+                    amount1: params_.amount1,
+                    payer: msg.sender,
+                    poolKey: poolKey,
+                    poolFee2: params_.fee2,
+                    poolFee3: params_.fee3
+                })
+            )
+        );
+
+        emit UniswapFlashLoanInitiated(
+            params_.token0, params_.token1, params_.fee1, params_.amount0, params_.amount1, nextPoolIndex_
+        );
     }
 
     function _letsPutASmileOnThatFace() internal {
@@ -398,6 +398,39 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         }
     }
 
+    /// @dev convenience overloader for cutting off JUMPs in adding aave assets
+    function _addToAssetSet(address[] memory assets) internal {
+        address asset;
+        bool added;
+        uint256 newLength;
+        for (uint256 i = 0; i < assets.length; ++i) {
+            asset = assets[i];
+            added = false;
+            assembly {
+                // Check if asset already exists using the asset address as key
+                let exists := tload(add(ASSETS_EXISTS_BASE_SLOT, asset))
+
+                // If it doesn't exist, add it
+                if iszero(exists) {
+                    added := true
+                    // Mark as existing
+                    tstore(add(ASSETS_EXISTS_BASE_SLOT, asset), 1)
+
+                    // Add to array
+                    let currentLength := tload(ASSETS_LENGTH_SLOT)
+                    tstore(add(ASSETS_BASE_SLOT, currentLength), asset)
+                    // Increment length
+                    newLength := add(currentLength, 1)
+                    tstore(ASSETS_LENGTH_SLOT, newLength)
+                }
+            }
+
+            if (added) {
+                emit AssetAdded(asset, newLength);
+            }
+        }
+    }
+
     function _cleanTstoreSlots() internal {
         assembly {
             for { let i := 0 } lt(i, tload(UNI_POOLS_SIZE_SLOT)) { i := add(i, 1) } {
@@ -415,14 +448,5 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             }
             tstore(ASSETS_LENGTH_SLOT, 0)
         }
-    }
-
-    // Helper function to convert IERC20_BAL[] to address[]
-    function _convertToAddressArray(IERC20_BAL[] memory tokens) internal pure returns (address[] memory) {
-        address[] memory addresses = new address[](tokens.length);
-        for (uint256 i = 0; i < tokens.length; i++) {
-            addresses[i] = address(tokens[i]);
-        }
-        return addresses;
     }
 }
