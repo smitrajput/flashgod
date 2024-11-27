@@ -2,7 +2,6 @@
 pragma solidity ^0.8.10;
 
 import {IPoolAddressesProvider, IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import {IFlashLoanSimpleReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IFlashLoanReceiver} from "@aave/core-v3/contracts/flashloan/interfaces/IFlashLoanReceiver.sol";
 // IERC20 already imported in PeripheryPayments
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -22,7 +21,11 @@ import {IFlashLoanRecipient} from "@balancer-labs/v2-interfaces/contracts/vault/
 import {IERC20 as IERC20_BAL} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import {console} from "forge-std/Test.sol";
 
+/// @title Tremor
+/// @author smitrajput
+/// @notice Aggregated flash loans on Aave, Balancer and Uniswap V3
 contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallback, PeripheryPayments {
+    ///
     struct FlashParams {
         address token0;
         uint24 fee1;
@@ -304,8 +307,12 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             _cleanTstoreSlots();
         }
 
-        if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
-        if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
+        if (amount0Owed > 0) {
+            pay(token0, address(this), msg.sender, amount0Owed);
+        }
+        if (amount1Owed > 0) {
+            pay(token1, address(this), msg.sender, amount1Owed);
+        }
 
         emit UniswapFlashLoanCallback(token0, token1, amount0Owed, amount1Owed, nextPoolIndex);
     }

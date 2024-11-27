@@ -4,10 +4,7 @@ pragma solidity ^0.8.10;
 import {IERC20} from "@balancer-labs/v2-interfaces/contracts/solidity-utils/openzeppelin/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import {DeployAaveV3} from "../script/DeployAaveV3.s.sol";
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
-import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
-import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {Tremor} from "../src/Tremor.sol";
@@ -678,6 +675,312 @@ contract TremorTest is Test {
         tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
+    function test_revert_LengthMismatchAave() public {
+        vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+
+        Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        /// @dev specify all the assets you want to flash loan from aave, here
+        address[] memory assets = new address[](8);
+        assets[0] = addresses.WETH;
+        assets[1] = addresses.WBTC;
+        assets[2] = addresses.USDC;
+        assets[3] = addresses.WE_ETH;
+        assets[4] = addresses.WSTETH;
+        assets[5] = addresses.CB_BTC;
+        assets[6] = addresses.LINK;
+        assets[7] = addresses.RETH;
+
+        // amounts.length != assets.length
+        uint256[] memory amounts = new uint256[](7);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            if (assets[i] == addresses.USDC) {
+                amounts[i] = (maxFlashloanable * 95) / 100; // could test with more
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.WSTETH);
+        balancerAssets[1] = IERC20(addresses.AAVE);
+        balancerAssets[2] = IERC20(addresses.BAL);
+        balancerAssets[3] = IERC20(addresses.WETH);
+
+        // balancer charges 0 flash-loan fees <3
+
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
+        uint256[] memory balancerAmounts = new uint256[](4);
+        for (uint256 i = 0; i < balancerAssets.length; i++) {
+            balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
+        }
+
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](4);
+        uniPoolValues[0] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WBTC, token1: addresses.WETH, fee: 3000});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.USDT, fee: 3000});
+        uniPoolValues[3] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 3000});
+
+        address[] memory uniPoolAddresses = new address[](4);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
+        bytes[] memory uniPools = new bytes[](4);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
+
+        simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
+
+        vm.expectRevert(Tremor.LengthMismatchAave.selector);
+        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+    }
+
+    function test_revert_LengthMismatchBalancer() public {
+        vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+
+        Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        /// @dev specify all the assets you want to flash loan from aave, here
+        address[] memory assets = new address[](8);
+        assets[0] = addresses.WETH;
+        assets[1] = addresses.WBTC;
+        assets[2] = addresses.USDC;
+        assets[3] = addresses.WE_ETH;
+        assets[4] = addresses.WSTETH;
+        assets[5] = addresses.CB_BTC;
+        assets[6] = addresses.LINK;
+        assets[7] = addresses.RETH;
+
+        uint256[] memory amounts = new uint256[](8);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < assets.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            if (assets[i] == addresses.USDC) {
+                amounts[i] = (maxFlashloanable * 95) / 100; // could test with more
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.WSTETH);
+        balancerAssets[1] = IERC20(addresses.AAVE);
+        balancerAssets[2] = IERC20(addresses.BAL);
+        balancerAssets[3] = IERC20(addresses.WETH);
+
+        // balancer charges 0 flash-loan fees <3
+
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
+        // balancerAmounts.length != balancerAssets.length
+        uint256[] memory balancerAmounts = new uint256[](3);
+        for (uint256 i = 0; i < balancerAmounts.length; i++) {
+            balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
+        }
+
+        /// @dev (token0, token1, poolFeeTier) represents a pool, so specify all the pools you
+        /// want to flash loan assets from
+        /// NOTE: uniV3 likes its pool tokens in certain order
+        UniPool[] memory uniPoolValues = new UniPool[](4);
+        uniPoolValues[0] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 500});
+        uniPoolValues[1] = UniPool({token0: addresses.WBTC, token1: addresses.WETH, fee: 3000});
+        uniPoolValues[2] = UniPool({token0: addresses.WETH, token1: addresses.USDT, fee: 3000});
+        uniPoolValues[3] = UniPool({token0: addresses.USDC, token1: addresses.WETH, fee: 3000});
+
+        address[] memory uniPoolAddresses = new address[](4);
+        for (uint256 i = 0; i < uniPoolValues.length; i++) {
+            uniPoolAddresses[i] = PoolAddress.computeAddress(
+                addresses.provider.UNI_V3_FACTORY,
+                PoolAddress.PoolKey({
+                    token0: uniPoolValues[i].token0,
+                    token1: uniPoolValues[i].token1,
+                    fee: uniPoolValues[i].fee
+                })
+            );
+        }
+
+        /// @dev specify all pool token amounts you want to flash loan, at 3rd and 4th arguments,
+        /// currently loaning 99.9% of pool token amounts
+        bytes[] memory uniPools = new bytes[](4);
+        for (uint256 i = 0; i < uniPoolAddresses.length; i++) {
+            uniPools[i] = abi.encode(
+                uniPoolValues[i].token0,
+                uniPoolValues[i].token1,
+                uniPoolValues[i].fee,
+                (IERC20(uniPoolValues[i].token0).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000,
+                (IERC20(uniPoolValues[i].token1).balanceOf(address(uniPoolAddresses[i])) * 999) / 1000
+            );
+        }
+
+        simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
+
+        vm.expectRevert(Tremor.LengthMismatchBalancer.selector);
+        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+    }
+
+    function test_revert_NotAavePool() public {
+        vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+
+        Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        /// @dev specify all the assets you want to flash loan from aave, here
+        address[] memory assets = new address[](8);
+        assets[0] = addresses.WETH;
+        assets[1] = addresses.WBTC;
+        assets[2] = addresses.USDC;
+        assets[3] = addresses.WE_ETH;
+        assets[4] = addresses.WSTETH;
+        assets[5] = addresses.CB_BTC;
+        assets[6] = addresses.LINK;
+        assets[7] = addresses.RETH;
+
+        uint256[] memory amounts = new uint256[](8);
+        uint256 maxFlashloanable;
+        for (uint256 i = 0; i < assets.length; i++) {
+            maxFlashloanable = IERC20(assets[i]).balanceOf((pool.getReserveData(assets[i])).aTokenAddress);
+            if (assets[i] == addresses.USDC) {
+                amounts[i] = (maxFlashloanable * 95) / 100; // could test with more
+            } else {
+                amounts[i] = maxFlashloanable - (10 ** IERC20Metadata(assets[i]).decimals());
+            }
+            // console.log("Flash-loanable:", i, maxFlashloanable / (10 ** IERC20Metadata(assets[i]).decimals()));
+        }
+
+        uint256[] memory premiums = new uint256[](8);
+
+        vm.expectRevert(Tremor.NotAavePool.selector);
+        tremor.executeOperation(assets, amounts, premiums, address(this), bytes(""));
+    }
+
+    function test_revert_NotBalancerVault() public {
+        vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+
+        Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        /// @dev specify all the assets you want to flash loan from balancer, here
+        /// NOTE: balancer likes its assets ascending ordered
+        IERC20[] memory balancerAssets = new IERC20[](4);
+        balancerAssets[0] = IERC20(addresses.WSTETH);
+        balancerAssets[1] = IERC20(addresses.AAVE);
+        balancerAssets[2] = IERC20(addresses.BAL);
+        balancerAssets[3] = IERC20(addresses.WETH);
+
+        // balancer charges 0 flash-loan fees <3
+
+        /// @dev specify all the asset amounts you want to flash loan from balancer, here
+        /// NOTE: currently loaning 100% of balancer TVL
+        uint256[] memory balancerAmounts = new uint256[](4);
+        for (uint256 i = 0; i < balancerAssets.length; i++) {
+            balancerAmounts[i] = balancerAssets[i].balanceOf(addresses.provider.BAL_VAULT);
+        }
+
+        vm.expectRevert(Tremor.NotBalancerVault.selector);
+        tremor.receiveFlashLoan(balancerAssets, balancerAmounts, new uint256[](0), bytes(""));
+    }
+
+    function test_revert_NotUniPool() public {
+        vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+
+        Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
+
+        pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
+
+        tremor = new Tremor(
+            addresses.provider.ADDRESSES_PROVIDER,
+            address(pool),
+            addresses.provider.UNI_V3_FACTORY,
+            addresses.provider.SWAP_ROUTER,
+            addresses.provider.BAL_VAULT,
+            addresses.WETH
+        );
+
+        vm.label(address(pool), "AAVE_POOL");
+
+        vm.expectRevert(Tremor.NotUniPool.selector);
+        tremor.uniswapV3FlashCallback(0, 0, bytes(""));
+    }
+
     function simulateAaveAndUniswapFlashLoanFees(
         address[] memory assets,
         uint256[] memory amounts,
@@ -686,7 +989,7 @@ contract TremorTest is Test {
         bytes[] memory uniPools
     ) internal {
         // simulating aave flash-loan fees, which should come from flash-loan profits
-        for (uint256 i = 0; i < assets.length; i++) {
+        for (uint256 i = 0; i < amounts.length; i++) {
             // NOTE: aavePremium is 500, 550 and 1000 for different chains, depending on tests passing (aave allowing it)
             // uint256 fee = (amounts[i] * aavePremium) / 1000000;
             deal(assets[i], address(tremor), (amounts[i] * aavePremium) / 1000000);

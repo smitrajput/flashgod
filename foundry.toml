@@ -15,4 +15,16 @@ evm_version = "cancun"
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
 
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 10
+depth = 40
+fail_on_revert = false
+call_override = false
+dictionary_weight = 80
+include_storage = true
+include_push_bytes = true
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
