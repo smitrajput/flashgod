@@ -775,13 +775,13 @@ contract TremorTest is Test {
         /// in the dominoeFlashLoans() call.
         /// Checking 4 slots atm
         assembly {
-            if iszero(eq(tload(0x77359400), 0)) { revert(0, 0) } // revert with no message
+            if iszero(eq(tload(0xBADBABE), 0)) { revert(0, 0) } // revert with no message
 
-            if iszero(eq(tload(0xC0FFEEBABE), 0)) { revert(0, 0) }
+            if iszero(eq(tload(0xD15EA5ED), 0)) { revert(0, 0) }
+
+            if iszero(eq(tload(0xDEFEA7ED), 0)) { revert(0, 0) }
 
             if iszero(eq(tload(0xDEADFACE), 0)) { revert(0, 0) }
-
-            if iszero(eq(tload(0xDEADBEEF), 0)) { revert(0, 0) }
         }
     }
 

@@ -15,12 +15,12 @@ contract TremorInvariants is Test {
     Addresses.EthereumAddresses internal addresses;
     IPool public pool;
 
-    uint256 constant ASSETS_BASE_SLOT = 0x3B9ACA00; // Base slot for our array of assets = 1 billy
-    uint256 constant ASSETS_LENGTH_SLOT = 0x77359400; // Slot to store length = 2 billy
-    uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xB2D05E00; // Base slot for existence mapping = 3 billy
-    uint256 constant UNI_POOLS_SIZE_SLOT = 0xC0FFEEBABE; // Slot to store uniPools' size = 3.254 billy
-    uint256 constant UNI_POOL_ADDRESS_SLOT = 0xDEADFACE; // Slot to store uniPool's address
-    uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADBEEF; // Slot to store next pool index = 3.735 billy
+    uint256 constant ASSETS_BASE_SLOT = 0xADD1C7ED; // Base slot for our array of assets = 1 billy
+    uint256 constant ASSETS_LENGTH_SLOT = 0xBADBABE; // Slot to store length = 2 billy
+    uint256 constant ASSETS_EXISTS_BASE_SLOT = 0xCA05C0DE; // Base slot for existence mapping = 3 billy
+    uint256 constant UNI_POOLS_SIZE_SLOT = 0xD15EA5ED; // Slot to store uniPools' size = 3.254 billy
+    uint256 constant UNI_POOL_ADDRESS_SLOT = 0xDEFEA7ED; // Slot to store uniPool's address
+    uint256 constant NEXT_POOL_INDEX_SLOT = 0xDEADFACE; // Slot to store next pool index = 3.735 billy
 
     function setUp() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
@@ -52,8 +52,8 @@ contract TremorInvariants is Test {
     }
 
     // Asset uniqueness in HashSet invariant
-    /// @dev: assumption here is that this function is called in the same txn as the test run txn, to
-    /// be able to access the same transaction storage slots
+    // NOTE: assumption here is that this function is called in the same txn as the test run txn, to
+    // be able to access the same transaction storage slots
     function invariant_uniqueAssets() public {
         // uint256 length = uint256(vm.load(address(tremor), ASSETS_LENGTH_SLOT));
         uint256 length;
