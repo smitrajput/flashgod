@@ -173,7 +173,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         emit DominoeFlashLoansInitiated(aaveAssets_, aaveAmounts_, balancerAssets_, balancerAmounts_, uniPools_.length);
     }
 
-    /*          ║
+    /*              ║
          *          ║
          *          ║                     +------------------+
          *          ▼                     |                  |
@@ -223,7 +223,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         return true;
     }
 
-    /*          ║
+    /*              ║
          *          ║
          *          ║                     +------------------+
          *          ▼                     |                  |

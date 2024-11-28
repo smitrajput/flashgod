@@ -37,7 +37,7 @@ Tremor solves this by recursively calling the uniswap flashloan initiator functi
 
 Updating the callchain above like so:
 ```
-Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> balancerFlashLoanCallback() -> flashLoan(Uniswap, 1) -> uniswapFlashLoanCallback(1) -> flashLoan(Uniswap, 2) -> uniswapFlashLoanCallback(2) -> ...uniswapFlashLoanCallback(n) -> HAVE FUN -> repayUniswapFlashLoanWithFees(2) -> repayBalancerFlashLoanWithFees() -> repayAaveFlashLoanWithFees()
+Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> balancerFlashLoanCallback() -> flashLoan(Uniswap, 1) -> uniswapFlashLoanCallback(1) -> flashLoan(Uniswap, 2) -> uniswapFlashLoanCallback(2) -> ...uniswapFlashLoanCallback(n) -> HAVE FUN -> repayUniswapFlashLoanWithFees(n) -> repayUniswapFlashLoanWithFees(n-1) -> ...repayUniswapFlashLoanWithFees(1) -> repayBalancerFlashLoanWithFees() -> repayAaveFlashLoanWithFees()
 ```
 
 ### Hot Stuff
