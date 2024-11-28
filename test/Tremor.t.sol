@@ -27,6 +27,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_ethereum() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -124,6 +125,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_arbitrum() public {
         vm.createSelectFork(vm.envString("ARBITRUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.ArbitrumAddresses memory addresses = Addresses.arbitrumAddresses();
 
@@ -221,6 +223,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_optimism() public {
         vm.createSelectFork(vm.envString("OPTIMISM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.OptimismAddresses memory addresses = Addresses.optimismAddresses();
 
@@ -307,6 +310,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_polygon() public {
         vm.createSelectFork(vm.envString("POLYGON_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.PolygonAddresses memory addresses = Addresses.polygonAddresses();
 
@@ -400,6 +404,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_base() public {
         vm.createSelectFork(vm.envString("BASE_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.BaseAddresses memory addresses = Addresses.baseAddresses();
 
@@ -493,6 +498,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_avalanche() public {
         vm.createSelectFork(vm.envString("AVAX_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.AvalancheAddresses memory addresses = Addresses.avalancheAddresses();
 
@@ -588,6 +594,7 @@ contract TremorTest is Test {
 
     function test_dominoeFlashLoans_bsc() public {
         vm.createSelectFork(vm.envString("BSC_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.BscAddresses memory addresses = Addresses.bscAddresses();
 
@@ -677,6 +684,7 @@ contract TremorTest is Test {
 
     function test_transientStorageCleanup() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -787,6 +795,7 @@ contract TremorTest is Test {
 
     function test_revert_LengthMismatchAave() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -886,6 +895,7 @@ contract TremorTest is Test {
 
     function test_revert_LengthMismatchBalancer() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -985,6 +995,7 @@ contract TremorTest is Test {
 
     function test_revert_NotAavePool() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -1032,6 +1043,7 @@ contract TremorTest is Test {
 
     function test_revert_NotBalancerVault() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 
@@ -1071,6 +1083,7 @@ contract TremorTest is Test {
 
     function test_revert_NotUniPool() public {
         vm.createSelectFork(vm.envString("ETHEREUM_RPC_URL"));
+        console.log("Chain ID:", block.chainid);
 
         Addresses.EthereumAddresses memory addresses = Addresses.ethereumAddresses();
 

@@ -135,12 +135,6 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
                         THE Chaos Function
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Explain to an end user what this does
-    /// @dev Explain to a developer any extra details
-    /// @param Documents a parameter just like in doxygen (must be followed by parameter name)
-    /// @return Documents the return variables of a contract’s function state variable
-    /// @inheritdoc	Copies all missing tags from the base function (must be followed by the contract name)
-
     /// @notice Initiates the flash loans killchain on Aave, Balancer and Uniswap V3
     /// @dev callback from aave flash loan calls balancer flash loan, whose callback
     /// initiates the uniswap flash loans
@@ -179,11 +173,22 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         emit DominoeFlashLoansInitiated(aaveAssets_, aaveAmounts_, balancerAssets_, balancerAmounts_, uniPools_.length);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            Callbacks
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev aave flash-loan callback
+    /*          ║
+         *          ║
+         *          ║                     +------------------+
+         *          ▼                     |                  |
+         *          ║                     |    Aave Pool     |
+         *          ║                     |                  |
+         *          ║                     +-----------------+
+         *          ║                              ║
+         *          ╚==============================╝
+         *                   flashLoan()           ║
+         *                                         ║ callback()
+         *                                         ║
+         *                                         ║
+         *                                         ║
+         *                                         ▼
+         */
 
     /// @dev callback by aave's pool contract post sending flash loan
     /// @param assets_ Array of Aave assets in flash loan
@@ -217,6 +222,23 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         return true;
     }
+
+    /*          ║
+         *          ║
+         *          ║                     +------------------+
+         *          ▼                     |                  |
+         *          ║                     |  Balancer Vault  |
+         *          ║                     |                  |
+         *          ║                     +-----------------+
+         *          ║                              ║
+         *          ╚==============================╝
+         *                   flashLoan()           ║
+         *                                         ║ callback()
+         *                                         ║
+         *                                         ║
+         *                                         ║
+         *                                         ▼
+         */
 
     /// @dev callback by balancer's vault contract post sending flash loan
     /// @param tokens_ Array of Balancer assets in flash loan
@@ -304,6 +326,23 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         emit BalancerFlashLoanReceived(tokens_, amounts_, feeAmounts_);
     }
+
+    /*              ║                                                ▲
+         *          ║                                                ║
+         *          ║                     +------------------+       ║
+         *          ▼                     |                  |       ║
+         *          ║                     |  Uniswap V3 Pool |       ║
+         *          ║                     |       (i)        |       ║
+         *          ║                     +-----------------+        ║
+         *          ║                              ║                 ║
+         *          ╚==============================╝                 ║
+         *                   flashLoan()           ║                 ║
+         *                                         ║ callback()      ║
+         *                                         ║                 ║
+         *                                         ║                 ║
+         *                                         ║                 ║
+         *                                         ▼                 ║
+         */
 
     /// @dev callback by uniswapV3Pool contract post sending flash loan
     /// @param fee0_ Uniswap V3 pool's token0 fee
@@ -460,13 +499,13 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         ///             /$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\                    ///
         ///            /$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\                   ///
         ///           /$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\                 ///
-        ///      IT'S NOT ABOUT MONEY, IT'S ABOUT SENDING A MESSAGE          ///
+        ///      it's not about money, it's about sending a message          ///
         ///                                                                  ///
         ////////////////////////////////////////////////////////////////////////
     }
 
     /// @dev a HashSet implementation for storing unique assets in O(1) time
-    /// with a separate iteratable array-like structure for accessing assets in O(1) time
+    /// with a separate array-like structure for iterating over assets in O(n) time
     /// @param asset_ Address of the asset to add to the HashSet
     function _addToAssetSet(address asset_) internal {
         bool added;
