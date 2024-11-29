@@ -8,9 +8,9 @@ __$22B in crypto across 7 transactions as-a-service__ (as of crypto prices on 6:
 ## Wait wut?!
 __flashgod__ is a light-weight flash-loan aggregator on all EVM compatible chains (with size), that provides __unbridled__ access to __all__ available assets of __all__ flash-loan providers on 7 different chains, *__in 1 transaction per chain__*, on a clean and easy-to-use interface,
 
-featuring flash-loan providers: _Aave V3, Uniswap V3, Balancer V2_
+featuring flash-loan providers: _Aave V3, Uniswap V3, Balancer V2_,
 
-on chains: _Ethereum, Arbitrum, Optimism, Polygon, Base, Avalanche, BSC_
+on chains: _Ethereum, Arbitrum, Optimism, Polygon, Base, Avalanche, BSC_.
 
 
 ## How?
@@ -27,16 +27,16 @@ Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> b
 
 ```mermaid
 graph LR
-    Tremor --> A[flashLoan\nAave]
-    A --> B[aaveFlashLoan\nCallback]
-    B --> C[flashLoan\nBalancer]
-    C --> D[balancerFlashLoan\nCallback]
-    B --> E[flashLoan\nUniswap]
-    E --> F[uniswapFlashLoan\nCallback]
+    Tremor --> A[flashLoan(Aave)]
+    A --> B[aaveFlashLoan(Callback)]
+    B --> C[flashLoan(Balancer)]
+    C --> D[balancerFlashLoan(Callback)]
+    D --> E[flashLoan(Uniswap)]
+    E --> F[uniswapFlashLoan(Callback)]
     F --> G[HAVE FUN]
-    G --> H[repayUniswapFlashLoan\nWithFees]
-    H --> I[repayBalancerFlashLoan\nWithFees]
-    I --> J[repayAaveFlashLoan\nWithFees]
+    G --> H[repayUniswapFlashLoan(WithFees)]
+    H --> I[repayBalancerFlashLoan(WithFees)]
+    I --> J[repayAaveFlashLoan(WithFees)]
 ```
 
 ```mermaid
