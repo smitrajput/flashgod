@@ -40,6 +40,15 @@ Cool tricks were possible when transient storage's 1-transaction persistence __y
     - `forge install`
     - `forge test --via-ir`, should show: <img width="592" alt="Screenshot 2024-11-29 at 6 15 49 PM" src="https://github.com/user-attachments/assets/ebbcdfae-1eef-4a81-9d51-741badb603db">
 2. Update [this list](https://github.com/smitrajput/flashgod/blob/main/src/config/Addresses.sol) of addresses with ones you want to flashloan
+3. Update corresponding assets and amounts in the test functions of the chains you want to flashloan from. For instance, to flashloan from Ethereum, update the `test_dominoeFlashLoans_ethereum()` function:
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L40) to update aave assets
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L51) to specify amounts for aave
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L65) to update balancer assets
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L75) to specify amounts for balancer
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L82) to update uniV3 assets
+   - [here](https://github.com/smitrajput/flashgod/blob/main/test/Tremor.t.sol#L103) to specify amounts for uniV3
+4. Finally, add the logic you want to execute using the aggregated flashloans to [_letsPutASmileOnThatFace()](https://github.com/smitrajput/flashgod/blob/main/src/Tremor.sol#L488)
+5. Run the test again for some fireworks.
 
 ## Credits
 Opening GIF Credits: [A.L.Crego](https://x.com/ALCrego_/status/1860242375118888960)
