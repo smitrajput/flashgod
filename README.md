@@ -18,48 +18,8 @@ Nothing new, but connecting existing dots. Simply a chain of callbacks initiatin
 
 Things get particularly interesting for Uniswap V3, where flashloans have to be borrowed from multiple pools in a single transaction, in a gas-efficient manner. _flashgod_ does so by recursively calling its uniV3 flashloan initiator function from its callback, with clever use of transient storage to keep things light.
 
+<img width="895" alt="Screenshot 2024-11-29 at 12 33 17 PM" src="https://github.com/user-attachments/assets/67c2b952-5d3d-416d-9959-8523e85bd17c">
 
-like so:
-
-```
-Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> balancerFlashLoanCallback() -> flashLoan(Uniswap) -> uniswapFlashLoanCallback() -> HAVE FUN -> repayUniswapFlashLoanWithFees() -> repayBalancerFlashLoanWithFees() -> repayAaveFlashLoanWithFees()
-```
-
-```mermaid
-graph TD
-    subgraph Borrow
-        direction LR
-        Tremor-->flashLoanAave
-        flashLoanAave-->aaveCallback
-        aaveCallback-->flashLoanBalancer
-        flashLoanBalancer-->balancerCallback
-    end
-    
-    subgraph UniswapChain
-        direction LR
-        balancerCallback-->flashLoanUni1
-        flashLoanUni1-->callback1
-        callback1-->flashLoanUni2
-        flashLoanUni2-->callback2
-        callback2-->dots[...]
-        dots-->callbackN
-    end
-    
-    subgraph Repay
-        direction LR
-        callbackN-->haveFun
-        haveFun-->repayN
-        repayN-->dots2[...]
-        dots2-->repay1
-        repay1-->repayBalancer
-        repayBalancer-->repayAave
-    end
-```
-
-Updating the callchain above like so:
-```
-Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> balancerFlashLoanCallback() -> flashLoan(Uniswap, 1) -> uniswapFlashLoanCallback(1) -> flashLoan(Uniswap, 2) -> uniswapFlashLoanCallback(2) -> ...uniswapFlashLoanCallback(n) -> HAVE FUN -> repayUniswapFlashLoanWithFees(n) -> repayUniswapFlashLoanWithFees(n-1) -> ...repayUniswapFlashLoanWithFees(1) -> repayBalancerFlashLoanWithFees() -> repayAaveFlashLoanWithFees()
-```
 
 ## Hot Stuff
 
