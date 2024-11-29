@@ -2,11 +2,11 @@
 
 __$22B in crypto across 7 transactions as a service__ (as of crypto prices on 6:30 am UTC, 29th Nov 2024).
 
-https://github.com/user-attachments/assets/ea468489-cca5-4792-b91f-c0fe5c880c59
+![absorb](https://github.com/user-attachments/assets/02c2e624-9b74-46a3-b527-c37919a84619)
 
 
 ### Wait wut?!
-__flashgod__ is a light-weight flash-loan aggregator on all EVM compatible chains (with size), that provides __unbridled__ access to __all__ available assets of __all__ flash-loan providers on 7 different chains, *__in 1 transaction__* per chain, on a clean and easy-to-use interface,
+__flashgod__ is a light-weight flash-loan aggregator on all EVM compatible chains (with size), that provides __unbridled__ access to __all__ available assets of __all__ flash-loan providers on 7 different chains, *__in 1 transaction per chain__*, on a clean and easy-to-use interface,
 
 featuring flash-loan providers:
 - Aave V3
@@ -52,4 +52,5 @@ Some cool tricks used by flashgod to achieve its goals:
 - yul-magic: using yul wherever sensibly possible to reduce gas, notably for decoding bytes array of pool data of all UniV3 pools and storing them in transient storage, in a way that allows for simple and quick access 
 
 
-'*' = as of crypto prices on 6:30 am UTC, 29th Nov 2024
+'*' = as of crypto prices on 6:30 am UTC, 29th Nov 2024 <br/>
+Opening GIF Credits: https://x.com/ALCrego_
