@@ -8,19 +8,9 @@ __$22B in crypto across 7 transactions as-a-service__ (as of crypto prices on 6:
 ## Wait wut?!
 __flashgod__ is a light-weight flash-loan aggregator on all EVM compatible chains (with size), that provides __unbridled__ access to __all__ available assets of __all__ flash-loan providers on 7 different chains, *__in 1 transaction per chain__*, on a clean and easy-to-use interface,
 
-featuring flash-loan providers:
-- Aave V3
-- Uniswap V3
-- Balancer V2
+featuring flash-loan providers: _Aave V3, Uniswap V3, Balancer V2_
 
-on chains:
-- Ethereum
-- Arbitrum
-- Optimism
-- Polygon
-- Base
-- Avalanche
-- BSC
+on chains: _Ethereum, Arbitrum, Optimism, Polygon, Base, Avalanche, BSC_
 
 
 ## How?
@@ -47,6 +37,26 @@ graph LR
     G --> H[repayUniswapFlashLoan\nWithFees]
     H --> I[repayBalancerFlashLoan\nWithFees]
     I --> J[repayAaveFlashLoan\nWithFees]
+```
+
+```mermaid
+graph LR
+    Tremor --> A[flashLoan(Aave)]
+    A --> B[aaveFlashLoan(Callback)]
+    B --> C[flashLoan(Balancer)]
+    C --> D[balancerFlashLoan(Callback)]
+    D --> E[flashLoan(Uniswap,1)]
+    E --> F[callback(1)]
+    F --> G[flashLoan(Uniswap,2)]
+    G --> H[callback(2)]
+    H --> I[...]
+    I --> J[callback(n)]
+    J --> K[HAVE FUN]
+    K --> L[repay(n)]
+    L --> M[...]
+    M --> N[repay(1)]
+    N --> O[repayBalancer(WithFees)]
+    O --> P[repayAave(WithFees)]
 ```
 
 Things become more interesting for the case of Uniswap's flash loans. Unlike Aave and Balancer, we can't borrow all assets in one call, coz every UniV3 pool needs to be borrowed from individually (cause of the design of UniV3 architecture, where liquidity even for a given asset lives in different pools with different fee tiers).
