@@ -33,14 +33,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -55,6 +48,8 @@ contract TremorTest is Test {
         assets[6] = addresses.LINK;
         assets[7] = addresses.RETH;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 99.9% of aave TVL, except for USDC where we loan 95%
         uint256[] memory amounts = new uint256[](8);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -119,8 +114,8 @@ contract TremorTest is Test {
         }
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
-
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_arbitrum() public {
@@ -131,14 +126,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -153,6 +141,8 @@ contract TremorTest is Test {
         assets[6] = addresses.LINK;
         assets[7] = addresses.RETH;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 99.9% of aave TVL, except for USDC where we loan maxFlashloanable - 50M
         uint256[] memory amounts = new uint256[](8);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -218,7 +208,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 550, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_optimism() public {
@@ -229,14 +220,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -251,6 +235,8 @@ contract TremorTest is Test {
         assets[6] = addresses.LINK;
         assets[7] = addresses.RETH;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 95% of aave TVL for USDC/USDT, and maxFlashloanable - 1 token for others
         uint256[] memory amounts = new uint256[](8);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -305,7 +291,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_polygon() public {
@@ -316,14 +303,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -337,6 +317,8 @@ contract TremorTest is Test {
         assets[5] = addresses.WSTETH;
         assets[6] = addresses.WMATIC;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 95% of aave TVL for USDC/USDT, and maxFlashloanable - 1 token for others
         uint256[] memory amounts = new uint256[](7);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -399,7 +381,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_base() public {
@@ -413,14 +396,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -433,6 +409,8 @@ contract TremorTest is Test {
         assets[4] = addresses.WSTETH;
         assets[5] = addresses.CB_BTC;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 95% of aave TVL for USDC, and maxFlashloanable - 1 token for others
         uint256[] memory amounts = new uint256[](6);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -493,7 +471,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_avalanche() public {
@@ -504,14 +483,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH_e
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH_e);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -525,6 +497,8 @@ contract TremorTest is Test {
         assets[5] = addresses.WETH_e;
         assets[6] = addresses.LINK_e;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 95% of aave TVL for USDC/USDT, and maxFlashloanable - 1 token for others
         uint256[] memory amounts = new uint256[](7);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -589,7 +563,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_dominoeFlashLoans_bsc() public {
@@ -600,14 +575,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.ETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.ETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -621,6 +589,8 @@ contract TremorTest is Test {
         assets[5] = addresses.WSTETH;
         assets[6] = addresses.FDUSD;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 95% of aave TVL for USDC/USDT, and maxFlashloanable - 1 token for others
         uint256[] memory amounts = new uint256[](7);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -679,7 +649,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_transientStorageCleanup() public {
@@ -690,14 +661,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -712,6 +676,8 @@ contract TremorTest is Test {
         assets[6] = addresses.LINK;
         assets[7] = addresses.RETH;
 
+        /// @dev specify all the asset amounts you want to flash loan from aave, here
+        /// NOTE: currently loaning 99.9% of aave TVL, except for USDC where we loan 95%
         uint256[] memory amounts = new uint256[](8);
         uint256 maxFlashloanable;
         for (uint256 i = 0; i < assets.length; i++) {
@@ -777,7 +743,8 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
         /// NOTE: this txn is the same txn in which dominoeFlashLoans() is called, so
         /// the same transient storage slots are available in this test, which were used
         /// in the dominoeFlashLoans() call.
@@ -801,14 +768,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -889,8 +849,9 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
         vm.expectRevert(Tremor.LengthMismatchAave.selector);
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_revert_LengthMismatchBalancer() public {
@@ -901,14 +862,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -989,8 +943,9 @@ contract TremorTest is Test {
 
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, uniPools);
 
+        bytes memory providers = abi.encode(address(pool), addresses.provider.BAL_VAULT);
         vm.expectRevert(Tremor.LengthMismatchBalancer.selector);
-        tremor.dominoeFlashLoans(assets, amounts, balancerAssets, balancerAmounts, uniPools);
+        tremor.dominoeFlashLoans(providers, assets, amounts, balancerAssets, balancerAmounts, uniPools);
     }
 
     function test_revert_NotAavePool() public {
@@ -1001,14 +956,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -1049,14 +997,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 
@@ -1089,14 +1030,7 @@ contract TremorTest is Test {
 
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         vm.label(address(pool), "AAVE_POOL");
 

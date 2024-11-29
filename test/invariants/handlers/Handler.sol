@@ -70,8 +70,10 @@ contract Handler is Test {
         amounts[0] = amount;
         amounts[1] = amount + 404;
 
+        bytes memory providers =
+            abi.encode(address(pool), addresses.provider.BAL_VAULT, addresses.provider.UNI_V3_FACTORY);
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, new bytes[](0));
-        tremor.dominoeFlashLoans(assets, amounts, new IERC20[](0), new uint256[](0), new bytes[](0));
+        tremor.dominoeFlashLoans(providers, assets, amounts, new IERC20[](0), new uint256[](0), new bytes[](0));
     }
 
     // Initiate calls to test approvals safety invariant
@@ -89,7 +91,9 @@ contract Handler is Test {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
 
+        bytes memory providers =
+            abi.encode(address(pool), addresses.provider.BAL_VAULT, addresses.provider.UNI_V3_FACTORY);
         simulateAaveAndUniswapFlashLoanFees(assets, amounts, 1000, addresses.provider.UNI_V3_FACTORY, new bytes[](0));
-        tremor.dominoeFlashLoans(assets, amounts, new IERC20[](0), new uint256[](0), new bytes[](0));
+        tremor.dominoeFlashLoans(providers, assets, amounts, new IERC20[](0), new uint256[](0), new bytes[](0));
     }
 }

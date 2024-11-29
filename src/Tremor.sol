@@ -9,7 +9,6 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {TransferHelper} from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3FlashCallback.sol";
 import "@uniswap/v3-core/contracts/libraries/LowGasSafeMath.sol";
 import "@uniswap/v3-periphery/contracts/base/PeripheryPayments.sol";
@@ -54,6 +53,9 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     /*                         Constants                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    uint256 constant AAVE_POOL_SLOT = 0xA77AC4ED; // Slot to store Aave pool address
+    uint256 constant UNI_V3_FACTORY_SLOT = 0xABADD00D; // Slot to store UniV3 factory address
+    uint256 constant BALANCER_VAULT_SLOT = 0xAC1DBED; // Slot to store Balancer vault address
     /// first 4 slots are sufficiently spaced out to avoid collisions
     uint256 constant ASSETS_BASE_SLOT = 0xADD1C7ED; // Base slot for our array of assets
     uint256 constant ASSETS_LENGTH_SLOT = 0xBADBABE; // Slot to store length
@@ -66,11 +68,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     /*                         Storage Variables                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    address internal _addressesProvider;
-    IPool internal _aavePool;
-    address internal _uniV3Factory;
-    ISwapRouter internal _uniswapRouter;
-    IVault internal _balancerVault;
+    /////////////////////////// ;) /////////////////////////////////
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         Events                           */
@@ -104,36 +102,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     error NotBalancerVault();
     error NotUniPool();
 
-    constructor(
-        address addressesProvider_,
-        address aavePool_,
-        address uniV3Factory_,
-        address swapRouter_,
-        address balVault_,
-        address WETH_
-    ) PeripheryImmutableState(uniV3Factory_, WETH_) {
-        _addressesProvider = addressesProvider_;
-        _aavePool = IPool(aavePool_);
-        _uniV3Factory = uniV3Factory_;
-        _uniswapRouter = ISwapRouter(swapRouter_);
-        _balancerVault = IVault(balVault_);
-    }
+    constructor(address uniV3Factory_, address WETH_) PeripheryImmutableState(uniV3Factory_, WETH_) {}
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         External Functions                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function ADDRESSES_PROVIDER() external view override returns (IPoolAddressesProvider) {
-        return IPoolAddressesProvider(_addressesProvider);
-    }
-
-    function POOL() external view override returns (IPool) {
-        return _aavePool;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        THE Chaos Function
-    //////////////////////////////////////////////////////////////*/
 
     /// @notice Initiates the flash loans killchain on Aave, Balancer and Uniswap V3
     /// @dev callback from aave flash loan calls balancer flash loan, whose callback
@@ -144,6 +117,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     /// @param balancerAmounts_ Array of Balancer assets' amounts to flash loan
     /// @param uniPools_ Array of bytes encoding Uniswap V3 pools' details to flash loan
     function dominoeFlashLoans(
+        bytes calldata providers_,
         address[] calldata aaveAssets_,
         uint256[] calldata aaveAmounts_,
         IERC20_BAL[] calldata balancerAssets_,
@@ -153,18 +127,23 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         if (aaveAssets_.length != aaveAmounts_.length) revert LengthMismatchAave();
         if (balancerAssets_.length != balancerAmounts_.length) revert LengthMismatchBalancer();
 
+        _tstoreProviders(providers_);
+
         _addToAssetSet(aaveAssets_);
         // need to call single asset variant coz of IERC20_BAL type for each balancer asset
         for (uint256 i = 0; i < balancerAssets_.length; ++i) {
             _addToAssetSet(address(balancerAssets_[i]));
         }
 
-        uint256[] memory interestRateModes = new uint256[](aaveAssets_.length);
-        _aavePool.flashLoan(
+        address aavePool;
+        assembly ("memory-safe") {
+            aavePool := tload(AAVE_POOL_SLOT)
+        }
+        IPool(aavePool).flashLoan(
             address(this),
             aaveAssets_,
             aaveAmounts_,
-            interestRateModes,
+            new uint256[](aaveAssets_.length), // interest rate modes = 0 for all assets
             address(0),
             abi.encode(balancerAssets_, balancerAmounts_, uniPools_),
             0
@@ -204,11 +183,18 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         address initiator_,
         bytes calldata params_
     ) external returns (bool) {
-        if (msg.sender != address(_aavePool)) revert NotAavePool();
+        address aavePool;
+        address balancerVault;
+        assembly ("memory-safe") {
+            aavePool := tload(AAVE_POOL_SLOT)
+            balancerVault := tload(BALANCER_VAULT_SLOT)
+        }
+
+        if (msg.sender != aavePool) revert NotAavePool();
 
         // approve aave pool to pull back flash loaned assets + fees
         for (uint256 i = 0; i < assets_.length; ++i) {
-            IERC20(assets_[i]).approve(address(_aavePool), amounts_[i] + premiums_[i]);
+            IERC20(assets_[i]).approve(address(aavePool), amounts_[i] + premiums_[i]);
         }
 
         (IERC20_BAL[] memory balancerAssets, uint256[] memory balancerAmounts, bytes[] memory uniPools) =
@@ -216,7 +202,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         // call balancer flash loan and from its callback, call uniswap flash loans
         // NOTE: calling _balancerVault.flashLoan() despite balancerAssets.length == 0 since
         // uni flash loan depends on its callback
-        _balancerVault.flashLoan(this, balancerAssets, balancerAmounts, abi.encode(uniPools));
+        IVault(balancerVault).flashLoan(this, balancerAssets, balancerAmounts, abi.encode(uniPools));
 
         emit AaveFlashLoanExecuted(assets_, amounts_, premiums_, initiator_);
 
@@ -251,7 +237,11 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256[] memory feeAmounts_,
         bytes memory userData_
     ) external override {
-        if (msg.sender != address(_balancerVault)) revert NotBalancerVault();
+        address balancerVault;
+        assembly ("memory-safe") {
+            balancerVault := tload(BALANCER_VAULT_SLOT)
+        }
+        if (msg.sender != balancerVault) revert NotBalancerVault();
 
         // initiate uniV3 flash loans
         bytes[] memory uniPools = abi.decode(userData_, (bytes[]));
@@ -262,7 +252,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
             uint256 amountA;
             uint256 amountB;
             // linearly storing uni pool addresses and fees in transient storage slots 0x00, 0x01, 0x02, ...
-            assembly {
+            assembly ("memory-safe") {
                 let offset
                 let uniPtr
                 tstore(UNI_POOLS_SIZE_SLOT, mload(uniPools))
@@ -321,7 +311,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
 
         // return loan to balancer vault
         for (uint256 i = 0; i < tokens_.length; ++i) {
-            TransferHelper.safeTransfer(address(tokens_[i]), address(_balancerVault), amounts_[i] + feeAmounts_[i]);
+            TransferHelper.safeTransfer(address(tokens_[i]), address(balancerVault), amounts_[i] + feeAmounts_[i]);
         }
 
         emit BalancerFlashLoanReceived(tokens_, amounts_, feeAmounts_);
@@ -350,7 +340,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     /// @param data_ Encoded data from UniswapV3Pool.flash()
     function uniswapV3FlashCallback(uint256 fee0_, uint256 fee1_, bytes calldata data_) external override {
         address uniPoolAddress;
-        assembly {
+        assembly ("memory-safe") {
             uniPoolAddress := tload(UNI_POOL_ADDRESS_SLOT)
         }
         if (msg.sender != uniPoolAddress) revert NotUniPool();
@@ -359,7 +349,8 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         address token0 = decoded.poolKey.token0;
         address token1 = decoded.poolKey.token1;
 
-        CallbackValidation.verifyCallback(_uniV3Factory, decoded.poolKey);
+        // factory being accessed from PeripheryImmutableState
+        CallbackValidation.verifyCallback(factory, decoded.poolKey);
 
         uint256 amount0Owed = LowGasSafeMath.add(decoded.amount0, fee0_);
         uint256 amount1Owed = LowGasSafeMath.add(decoded.amount1, fee1_);
@@ -371,12 +362,12 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         uint256 amountB;
         uint256 uniPoolsSize;
         uint256 nextPoolIndex;
-        assembly {
+        assembly ("memory-safe") {
             uniPoolsSize := tload(UNI_POOLS_SIZE_SLOT)
             nextPoolIndex := tload(NEXT_POOL_INDEX_SLOT)
         }
         if (nextPoolIndex < uniPoolsSize) {
-            assembly {
+            assembly ("memory-safe") {
                 // NOTE: caching consumes more gas than recomputing everytime
                 // let nextPoolPos := mul(nextPoolIndex, 0x05)
                 tokenA := tload(add(0x00, mul(nextPoolIndex, 0x05)))
@@ -419,6 +410,16 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         emit UniswapFlashLoanCallback(token0, token1, amount0Owed, amount1Owed, nextPoolIndex);
     }
 
+    /// @dev dummy implementation to satisfy IFlashLoanReceiver interface
+    function ADDRESSES_PROVIDER() external pure override returns (IPoolAddressesProvider) {
+        return IPoolAddressesProvider(address(0));
+    }
+
+    /// @dev dummy implementation to satisfy IFlashLoanReceiver interface
+    function POOL() external pure override returns (IPool) {
+        return IPool(address(0));
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         Internal Functions                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -429,10 +430,10 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     function _initFlash(FlashParams memory params_, uint256 nextPoolIndex_) internal {
         PoolAddress.PoolKey memory poolKey =
             PoolAddress.PoolKey({token0: params_.token0, token1: params_.token1, fee: params_.fee1});
-        IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(_uniV3Factory, poolKey));
+        IUniswapV3Pool uniPool = IUniswapV3Pool(PoolAddress.computeAddress(factory, poolKey));
 
         address uniPoolAddress = address(uniPool);
-        assembly {
+        assembly ("memory-safe") {
             tstore(UNI_POOL_ADDRESS_SLOT, uniPoolAddress)
             tstore(NEXT_POOL_INDEX_SLOT, nextPoolIndex_)
         }
@@ -459,19 +460,19 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     }
 
     /// @dev FINAL trigger function to execute your logic with the flash loaned funds
-    /// @dev Currently just logs the balances of all flash loaned assets in the HashSet
+    /// @dev Currently just logs the balances of all flash loaned assets in the Iterable-Set
     function _letsPutASmileOnThatFace() internal {
         console.log("let's put a smile on that face ;)");
 
         uint256 length;
         address asset;
-        assembly {
+        assembly ("memory-safe") {
             length := tload(ASSETS_LENGTH_SLOT)
         }
 
         // Iterate through the array portion where we stored the assets sequentially
         for (uint256 i = 0; i < length; ++i) {
-            assembly {
+            assembly ("memory-safe") {
                 asset := tload(add(ASSETS_BASE_SLOT, i))
             }
             uint256 balance = IERC20(asset).balanceOf(address(this));
@@ -504,13 +505,23 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         ////////////////////////////////////////////////////////////////////////
     }
 
-    /// @dev a HashSet implementation for storing unique assets in O(1) time
+    /// @dev helper function to store flashloan providers in transient storage slots
+    /// @param providers_ Encoded providers' data from dominoeFlashLoans()
+    function _tstoreProviders(bytes calldata providers_) internal {
+        (address aavePool, address balancerVault) = abi.decode(providers_, (address, address));
+        assembly ("memory-safe") {
+            tstore(AAVE_POOL_SLOT, aavePool)
+            tstore(BALANCER_VAULT_SLOT, balancerVault)
+        }
+    }
+
+    /// @dev an Iterable-Set implementation for storing unique assets in O(1) time
     /// with a separate array-like structure for iterating over assets in O(n) time
-    /// @param asset_ Address of the asset to add to the HashSet
+    /// @param asset_ Address of the asset to add to the Iterable-Set
     function _addToAssetSet(address asset_) internal {
         bool added;
         uint256 newLength;
-        assembly {
+        assembly ("memory-safe") {
             // Check if asset already exists using the asset address as key
             let exists := tload(add(ASSETS_EXISTS_BASE_SLOT, asset_))
 
@@ -535,7 +546,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     }
 
     /// @dev convenience overloader for cutting off JUMPs in adding aave assets
-    /// @param assets_ Array of addresses of assets to add to the HashSet
+    /// @param assets_ Array of addresses of assets to add to the Iterable-Set
     function _addToAssetSet(address[] memory assets_) internal {
         address asset;
         bool added;
@@ -543,7 +554,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
         for (uint256 i = 0; i < assets_.length; ++i) {
             asset = assets_[i];
             added = false;
-            assembly {
+            assembly ("memory-safe") {
                 // Check if asset already exists using the asset address as key
                 let exists := tload(add(ASSETS_EXISTS_BASE_SLOT, asset))
 
@@ -571,7 +582,7 @@ contract Tremor is IFlashLoanReceiver, IFlashLoanRecipient, IUniswapV3FlashCallb
     /// @dev helper function to clean up transient storage slots after flash
     /// loan txn for security
     function _cleanTstoreSlots() internal {
-        assembly {
+        assembly ("memory-safe") {
             for { let i := 0 } lt(i, tload(UNI_POOLS_SIZE_SLOT)) { i := add(i, 1) } {
                 tstore(add(0x00, mul(i, 0x03)), 0)
                 tstore(add(0x01, mul(i, 0x03)), 0)

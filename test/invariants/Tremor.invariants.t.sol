@@ -29,14 +29,7 @@ contract TremorInvariants is Test {
         pool = IPool(IPoolAddressesProvider(addresses.provider.ADDRESSES_PROVIDER).getPool());
 
         // Setup tremor contract
-        tremor = new Tremor(
-            addresses.provider.ADDRESSES_PROVIDER,
-            address(pool),
-            addresses.provider.UNI_V3_FACTORY,
-            addresses.provider.SWAP_ROUTER,
-            addresses.provider.BAL_VAULT,
-            addresses.WETH
-        );
+        tremor = new Tremor(addresses.provider.UNI_V3_FACTORY, addresses.WETH);
 
         // Setup handler
         handler = new Handler(tremor);
