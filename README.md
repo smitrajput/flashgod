@@ -1,15 +1,19 @@
 # flashgod
 
-Light-weight flash-loan aggregator on all EVM compatible chains (with size).
+__$22B in crypto across 7 transactions as a service__ (as of crypto prices on 6:30 am UTC, 29th Nov 2024).
 
-Unbridled access to __all__ flashloanable assets of __all__ flash-loan providers on __any__ given chain, *__in 1 transaction__*
+https://github.com/user-attachments/assets/ea468489-cca5-4792-b91f-c0fe5c880c59
 
-__featuring providers__
+
+### Wait wut?!
+__flashgod__ is a light-weight flash-loan aggregator on all EVM compatible chains (with size), that provides __unbridled__ access to __all__ available assets of __all__ flash-loan providers on 7 different chains, *__in 1 transaction__* per chain, on a clean and easy-to-use interface,
+
+featuring flash-loan providers:
 - Aave V3
 - Uniswap V3
 - Balancer V2
 
-__on chains__
+on chains:
 - Ethereum
 - Arbitrum
 - Optimism
@@ -46,3 +50,6 @@ Some cool tricks used by flashgod to achieve its goals:
 - semi-statelessness: one of the key goals of flashgod was to be as feather-weight as possible, meaning almost 0 use of storage state. The 1-transaction nature of aggregating flashloans aligned elegantly with the killer feature of transient storage being persistent for exactly 1 transaction. This allowed flashgod to share metadata of flashloan providers across various calls, and also to remember all the assets it received, with their amounts.
 - hash-set: the key-value nature of transient storage allows for a simple implementation of 2 sets of mappings, 1 to allow adding assets to hash-set in O(1) time, and the other to iterate over all the unique assets to be able to execute strategies using them in O(n) time. Together, looking like an iteratable hash-set.
 - yul-magic: using yul wherever sensibly possible to reduce gas, notably for decoding bytes array of pool data of all UniV3 pools and storing them in transient storage, in a way that allows for simple and quick access 
+
+
+'*' = as of crypto prices on 6:30 am UTC, 29th Nov 2024
