@@ -27,27 +27,34 @@ Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> b
 
 ```mermaid
 graph TD
-    Tremor-->flashLoanAave
-    flashLoanAave-->aaveCallback
-    aaveCallback-->flashLoanBalancer
-    flashLoanBalancer-->balancerCallback
-    balancerCallback-->flashLoanUni1
-    flashLoanUni1-->callback1
-    callback1-->flashLoanUni2
-    flashLoanUni2-->callback2
-    callback2-->dots[...]
-    dots-->callbackN
-    callbackN-->haveFun
-    haveFun-->repayN
-    repayN-->dots2[...]
-    dots2-->repay1
-    repay1-->repayBalancer
-    repayBalancer-->repayAave
+    subgraph Borrow
+        direction LR
+        Tremor-->flashLoanAave
+        flashLoanAave-->aaveCallback
+        aaveCallback-->flashLoanBalancer
+        flashLoanBalancer-->balancerCallback
+    end
+    
+    subgraph UniswapChain
+        direction LR
+        balancerCallback-->flashLoanUni1
+        flashLoanUni1-->callback1
+        callback1-->flashLoanUni2
+        flashLoanUni2-->callback2
+        callback2-->dots[...]
+        dots-->callbackN
+    end
+    
+    subgraph Repay
+        direction LR
+        callbackN-->haveFun
+        haveFun-->repayN
+        repayN-->dots2[...]
+        dots2-->repay1
+        repay1-->repayBalancer
+        repayBalancer-->repayAave
+    end
 ```
-
-Things become more interesting for the case of Uniswap's flash loans. Unlike Aave and Balancer, we can't borrow all assets in one call, coz every UniV3 pool needs to be borrowed from individually (cause of the design of UniV3 architecture, where liquidity even for a given asset lives in different pools with different fee tiers).
-
-Tremor solves this by recursively calling the uniswap flashloan initiator function from its callback, and then calling the same function again from the next callback, and so on, until flashloans are borrowed from all the pools, while using transient storage to access data of all the pools to flashlaon from, across sub-contexts of the recursive calls, instead of using storage to lighten the gas costs.
 
 Updating the callchain above like so:
 ```
