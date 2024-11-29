@@ -26,37 +26,23 @@ Tremor -> flashLoan(Aave) -> aaveFlashLoanCallback() -> flashLoan(Balancer) -> b
 ```
 
 ```mermaid
-graph LR
-    Tremor --> A[flashLoan(Aave)]
-    A --> B[aaveFlashLoan(Callback)]
-    B --> C[flashLoan(Balancer)]
-    C --> D[balancerFlashLoan(Callback)]
-    D --> E[flashLoan(Uniswap)]
-    E --> F[uniswapFlashLoan(Callback)]
-    F --> G[HAVE FUN]
-    G --> H[repayUniswapFlashLoan(WithFees)]
-    H --> I[repayBalancerFlashLoan(WithFees)]
-    I --> J[repayAaveFlashLoan(WithFees)]
-```
-
-```mermaid
-graph LR
-    Tremor --> A[flashLoan(Aave)]
-    A --> B[aaveFlashLoan(Callback)]
-    B --> C[flashLoan(Balancer)]
-    C --> D[balancerFlashLoan(Callback)]
-    D --> E[flashLoan(Uniswap,1)]
-    E --> F[callback(1)]
-    F --> G[flashLoan(Uniswap,2)]
-    G --> H[callback(2)]
-    H --> I[...]
-    I --> J[callback(n)]
-    J --> K[HAVE FUN]
-    K --> L[repay(n)]
-    L --> M[...]
-    M --> N[repay(1)]
-    N --> O[repayBalancer(WithFees)]
-    O --> P[repayAave(WithFees)]
+graph TD
+    Tremor-->flashLoanAave
+    flashLoanAave-->aaveCallback
+    aaveCallback-->flashLoanBalancer
+    flashLoanBalancer-->balancerCallback
+    balancerCallback-->flashLoanUni1
+    flashLoanUni1-->callback1
+    callback1-->flashLoanUni2
+    flashLoanUni2-->callback2
+    callback2-->dots[...]
+    dots-->callbackN
+    callbackN-->haveFun
+    haveFun-->repayN
+    repayN-->dots2[...]
+    dots2-->repay1
+    repay1-->repayBalancer
+    repayBalancer-->repayAave
 ```
 
 Things become more interesting for the case of Uniswap's flash loans. Unlike Aave and Balancer, we can't borrow all assets in one call, coz every UniV3 pool needs to be borrowed from individually (cause of the design of UniV3 architecture, where liquidity even for a given asset lives in different pools with different fee tiers).
