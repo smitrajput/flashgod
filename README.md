@@ -51,8 +51,8 @@ Provide a simpler, light-weight, easy-to-use interface to access much larger fla
 
 ## Scoop for Devs 🍨
 
-Cool tricks were possible when transient storage's 1-transaction persistence __yin__, met _flashgod_'s 1-transaction flashloan __yang__:<br/><br/>
-    <img width="500" alt="Screenshot 2024-11-30 at 9 57 18 AM" src="https://github.com/user-attachments/assets/b02c523d-f908-4137-b269-63ce7d964316">
+Cool tricks were possible when transient storage's 1-transaction persistence __yin__, met _flashgod_'s 1-transaction flashloan __yang__:<br/>
+    <p align="center"> <img width="500" alt="Screenshot 2024-11-30 at 9 57 18 AM" src="https://github.com/user-attachments/assets/b02c523d-f908-4137-b269-63ce7d964316"> </p>
 - __statelessness__: extensive use of transient storage allowed
   - 0 state variables (except the ones inherited which can be removed too)
   - upto 200x cheaper reads and writes across the transaction (max SSTORE = 20k gas against max TSTORE = 100 gas)
