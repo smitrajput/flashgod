@@ -60,7 +60,7 @@ Cool tricks were possible when transient storage's 1-transaction persistence __y
 - __yulism__: using yul wherever sensibly possible to reduce gas significantly, most notably for [decoding bytes array](https://github.com/smitrajput/flashgod/blob/main/src/Tremor.sol#L254) of pool data of all UniV3 pools and storing them in transient storage, in a way that allows for simple and quick access
 - __iterable-set__: the key-value nature of transient storage allows for implementing an _Iterable-Set_ data structure using two mappings, 1 to allow adding unique assets in O(1) time, and the other to iterate over these assets through insertion order in O(n) time. This came handy in storing overlapping assets from multiple flashloan providers, uniquely.
 
-## Project Structure {}
+## Project Structure { }
 
 `src/`
 - `Tremor.sol` - Core contract implementing aggregated flash loans across Aave, Balancer, and Uniswap V3
